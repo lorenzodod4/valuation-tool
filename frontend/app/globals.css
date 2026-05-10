@@ -1134,6 +1134,35 @@ body {
   margin-top: 32px;
 }
 
+.error-suggestions {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 24px;
+}
+
+.error-suggestions-label {
+  margin-right: 6px;
+  font-family: var(--font-geist-mono), ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  color: var(--text-quaternary);
+}
+
+.coverage-note {
+  margin-top: 14px;
+  margin-left: auto;
+  margin-right: auto;
+  max-width: 480px;
+  text-align: center;
+  font-family: var(--font-geist-mono), ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  color: var(--text-quaternary);
+}
+
 .btn-primary,
 .btn-secondary {
   display: inline-flex;

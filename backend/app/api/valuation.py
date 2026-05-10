@@ -25,11 +25,21 @@ _multiples = MultiplesValuator(_fetcher)
 def _upstream_http_error(exc: Exception, ticker: str) -> HTTPException:
     """Translate fetcher exceptions into HTTP responses.
 
-    - PermissionError → 503 (our API key is bad — operator problem, not the user's).
+    - PermissionError mentioning "premium" → 422 (user picked an unsupported ticker).
+    - Other PermissionError → 503 (our API key is bad — operator problem).
     - RuntimeError mentioning "rate limit" → 429 (transient, retry later).
     - Other RuntimeError → 503 (upstream issue).
     """
     if isinstance(exc, PermissionError):
+        msg = str(exc)
+        if "premium" in msg.lower() or "not supported" in msg.lower():
+            return HTTPException(
+                status_code=422,
+                detail=(
+                    "This ticker is not supported on the free tier. "
+                    "Try a US-listed equity like AAPL, MSFT, or JPM."
+                ),
+            )
         return HTTPException(
             status_code=503,
             detail="Upstream data provider authentication error",

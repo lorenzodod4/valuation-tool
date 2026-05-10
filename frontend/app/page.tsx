@@ -46,6 +46,10 @@ export default function HomePage() {
 
         <div style={{ marginBottom: 96 }}>
           <TickerChips />
+          <p className="coverage-note">
+            Currently supports US-listed equities (NYSE, NASDAQ). Other markets
+            coming soon.
+          </p>
         </div>
 
         <FeatureCards />

@@ -111,6 +111,27 @@ class FinancialDataFetcher:
         raw = data[0] if isinstance(data, list) else data
         return self._normalize_ratios_ttm(raw)
 
+    def get_stock_peers(self, symbol: str) -> list[dict[str, Any]]:
+        """Fetch FMP's peer suggestions for a symbol.
+
+        Returns the raw peer dicts ({symbol, companyName, price, mktCap}) so the
+        caller can size-filter. Returns [] on empty response *or any error* —
+        peer discovery should never sink the whole multiples valuation; the
+        caller is expected to fall back to a static peer map.
+        """
+        sym = symbol.upper()
+        try:
+            data = self._request(
+                "/stock-peers",
+                {"symbol": sym},
+                f"peers:{sym}",
+            )
+        except Exception:
+            return []
+        if not isinstance(data, list):
+            return []
+        return data
+
     def get_all_for_ticker(self, symbol: str) -> dict[str, Any] | None:
         """Fetch profile + 3 statements + TTM metrics + TTM ratios in one bundle.
 
@@ -158,6 +179,11 @@ class FinancialDataFetcher:
             status = response.status_code
             if status in (401, 403):
                 raise PermissionError("Invalid FMP API key")
+            if status == 402:
+                raise PermissionError(
+                    "Ticker requires premium FMP subscription. "
+                    "This tool supports US-listed equities on the free tier."
+                )
             if status == 429:
                 raise RuntimeError("FMP rate limit reached")
             if status >= 500:

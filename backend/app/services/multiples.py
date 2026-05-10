@@ -15,6 +15,50 @@ DA_KEYS = ("da",)
 
 RATIO_METRICS = ("pe_ratio", "ev_ebitda", "ev_sales", "p_book")
 
+PEER_MAX_COUNT = 5
+PEER_MIN_RATIO = 0.01  # peer mkt cap must be ≥ 1% of target
+PEER_MAX_RATIO = 100.0  # …and ≤ 100× target
+
+
+def _filter_quality_peers(
+    target_market_cap: float | None,
+    raw_peers: list[dict[str, Any]],
+) -> list[str]:
+    """Pick up to 5 well-sized peers from FMP's stock-peers response.
+
+    - Skips peers missing or with non-positive market cap.
+    - If the target has a known market cap, drops peers outside [1%, 100×] of it.
+    - Sorts by market cap descending so the largest peers come first.
+    - Returns the top N symbols (upper-cased).
+    """
+    has_target = (
+        target_market_cap is not None
+        and isinstance(target_market_cap, (int, float))
+        and target_market_cap > 0
+    )
+
+    candidates: list[tuple[str, float]] = []
+    for peer in raw_peers:
+        symbol = peer.get("symbol")
+        if not symbol:
+            continue
+        try:
+            mc = float(peer.get("mktCap"))
+        except (TypeError, ValueError):
+            continue
+        if mc <= 0:
+            continue
+        if has_target:
+            assert target_market_cap is not None
+            if mc < target_market_cap * PEER_MIN_RATIO:
+                continue
+            if mc > target_market_cap * PEER_MAX_RATIO:
+                continue
+        candidates.append((str(symbol).upper(), mc))
+
+    candidates.sort(key=lambda item: item[1], reverse=True)
+    return [sym for sym, _ in candidates[:PEER_MAX_COUNT]]
+
 
 class MultiplesValuator:
     """Compute trading multiples for a target and peer-implied valuations."""
@@ -119,11 +163,33 @@ class MultiplesValuator:
             "p_book": p_book,
         }
 
-    def get_peers(self, ticker: str, custom_peers: list[str] | None = None) -> list[str]:
-        """Return the peer list, preferring custom_peers when provided."""
+    def get_peers(
+        self,
+        ticker: str,
+        custom_peers: list[str] | None = None,
+        target_market_cap: float | None = None,
+    ) -> list[str]:
+        """Return the peer list.
+
+        Resolution order:
+        1. `custom_peers` if provided (caller knows best).
+        2. FMP `/stable/stock-peers`, size-filtered against the target market cap.
+        3. Static PEER_MAP fallback for known tickers when FMP gives us nothing.
+        4. Empty list — caller renders "insufficient data" downstream.
+        """
         if custom_peers is not None:
             return [p.upper() for p in custom_peers]
-        return list(self.PEER_MAP.get(ticker.upper(), []))
+
+        sym = ticker.upper()
+        raw = self.fetcher.get_stock_peers(sym)
+        # FMP occasionally echoes the target in its own peer list — strip it.
+        raw = [p for p in raw if str(p.get("symbol", "")).upper() != sym]
+
+        filtered = _filter_quality_peers(target_market_cap, raw)
+        if filtered:
+            return filtered
+
+        return list(self.PEER_MAP.get(sym, []))
 
     def compute_peer_statistics(self, peer_tickers: list[str]) -> dict[str, Any]:
         """Compute multiples for each peer and aggregate median/mean/min/max."""
@@ -164,7 +230,11 @@ class MultiplesValuator:
     ) -> dict[str, Any]:
         """Run a full multiples valuation for a target against its peers."""
         target = self.compute_multiples(ticker)
-        peer_tickers = self.get_peers(ticker, custom_peers)
+        peer_tickers = self.get_peers(
+            ticker,
+            custom_peers=custom_peers,
+            target_market_cap=target.get("market_cap"),
+        )
         peer_data = self.compute_peer_statistics(peer_tickers)
         stats = peer_data["statistics"]
 

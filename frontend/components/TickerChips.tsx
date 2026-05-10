@@ -2,7 +2,16 @@
 
 import { useRouter } from "next/navigation";
 
-const DEFAULT_TICKERS = ["AAPL", "MSFT", "NVDA", "JPM", "TSLA"];
+const DEFAULT_TICKERS = [
+  "AAPL",
+  "NVDA",
+  "JPM",
+  "TSLA",
+  "GS",
+  "AMD",
+  "META",
+  "JNJ",
+];
 
 interface TickerChipsProps {
   tickers?: string[];
