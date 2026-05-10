@@ -6,24 +6,12 @@ from typing import Any, ClassVar
 from app.services.data_fetcher import FinancialDataFetcher
 
 
-TOTAL_DEBT_KEYS = ("Total Debt", "Long Term Debt")
-CASH_KEYS = (
-    "Cash And Cash Equivalents",
-    "Cash Cash Equivalents And Short Term Investments",
-    "Cash Financial",
-)
-EQUITY_KEYS = (
-    "Stockholders Equity",
-    "Common Stock Equity",
-    "Total Equity Gross Minority Interest",
-)
-EBITDA_KEYS = ("EBITDA", "Normalized EBITDA")
-EBIT_KEYS = ("EBIT", "Operating Income")
-DA_KEYS = (
-    "Reconciled Depreciation",
-    "Depreciation And Amortization",
-    "Depreciation",
-)
+TOTAL_DEBT_KEYS = ("total_debt",)
+CASH_KEYS = ("cash",)
+EQUITY_KEYS = ("stockholder_equity",)
+EBITDA_KEYS = ("ebitda",)
+EBIT_KEYS = ("ebit", "operating_income")
+DA_KEYS = ("da",)
 
 RATIO_METRICS = ("pe_ratio", "ev_ebitda", "ev_sales", "p_book")
 
@@ -49,11 +37,16 @@ class MultiplesValuator:
 
     def compute_multiples(self, ticker: str) -> dict[str, Any]:
         """Compute trading multiples for a single ticker from the latest fiscal year."""
-        financials = self.fetcher.get_all_financials(ticker)
+        financials = self.fetcher.get_all_for_ticker(ticker)
+        if financials is None:
+            raise ValueError(f"Ticker '{ticker}' not found")
+
         profile = financials.get("profile") or {}
         income = financials.get("income_statement") or []
         balance = financials.get("balance_sheet") or []
         cashflow = financials.get("cash_flow") or []
+        key_metrics_ttm = financials.get("key_metrics_ttm") or {}
+        ratios_ttm = financials.get("ratios_ttm") or {}
 
         if not income or not balance:
             raise ValueError(f"Insufficient financial data for {ticker}")
@@ -71,8 +64,8 @@ class MultiplesValuator:
         equity = self._first_value(latest_balance, EQUITY_KEYS)
         net_debt = total_debt - cash
 
-        revenue = self._to_float(latest_income.get("Total Revenue"))
-        net_income = self._to_float(latest_income.get("Net Income"))
+        revenue = self._to_float(latest_income.get("revenue"))
+        net_income = self._to_float(latest_income.get("net_income"))
 
         ebitda = self._first_value(latest_income, EBITDA_KEYS)
         if ebitda is None:
@@ -83,13 +76,27 @@ class MultiplesValuator:
             if ebit is not None and da is not None:
                 ebitda = ebit + abs(da)
 
-        enterprise_value: float | None = None
-        if market_cap is not None:
+        # Prefer FMP's TTM enterprise value when available; fall back to derived.
+        enterprise_value = self._to_float(key_metrics_ttm.get("enterprise_value"))
+        if enterprise_value is None and market_cap is not None:
             enterprise_value = market_cap + total_debt - cash
 
-        pe_ratio = self._safe_div(market_cap, net_income)
+        # P/E and P/Book live on the ratios-ttm endpoint (no longer on profile or key-metrics-ttm).
+        pe_ratio = self._to_float(ratios_ttm.get("pe_ratio"))
         if pe_ratio is None:
-            pe_ratio = self._to_float(profile.get("pe_ratio"))
+            pe_ratio = self._safe_div(market_cap, net_income)
+
+        ev_ebitda = self._to_float(key_metrics_ttm.get("ev_ebitda"))
+        if ev_ebitda is None:
+            ev_ebitda = self._safe_div(enterprise_value, ebitda)
+
+        ev_sales = self._to_float(key_metrics_ttm.get("ev_sales"))
+        if ev_sales is None:
+            ev_sales = self._safe_div(enterprise_value, revenue)
+
+        p_book = self._to_float(ratios_ttm.get("p_book"))
+        if p_book is None:
+            p_book = self._safe_div(market_cap, equity)
 
         return {
             "ticker": ticker.upper(),
@@ -107,9 +114,9 @@ class MultiplesValuator:
             "shares_outstanding": shares,
             "price": price,
             "pe_ratio": pe_ratio,
-            "ev_ebitda": self._safe_div(enterprise_value, ebitda),
-            "ev_sales": self._safe_div(enterprise_value, revenue),
-            "p_book": self._safe_div(market_cap, equity),
+            "ev_ebitda": ev_ebitda,
+            "ev_sales": ev_sales,
+            "p_book": p_book,
         }
 
     def get_peers(self, ticker: str, custom_peers: list[str] | None = None) -> list[str]:

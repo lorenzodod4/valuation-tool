@@ -1,25 +1,17 @@
-"""Simplified 5-year DCF valuation built on yfinance-shaped financials."""
+"""Simplified 5-year DCF valuation built on FMP-normalized financials."""
 
 from typing import Any
 
 
-REVENUE_KEY = "Total Revenue"
+REVENUE_KEY = "revenue"
 
-EBIT_KEYS = ("EBIT", "Operating Income")
-DA_KEYS = (
-    "Reconciled Depreciation",
-    "Depreciation And Amortization",
-    "Depreciation",
-)
-CAPEX_KEYS = ("Capital Expenditure",)
-WC_CHANGE_KEYS = ("Change In Working Capital", "Changes In Working Capital")
+EBIT_KEYS = ("ebit", "operating_income")
+DA_KEYS = ("da",)
+CAPEX_KEYS = ("capex",)
+WC_CHANGE_KEYS = ("wc_change",)
 
-TOTAL_DEBT_KEYS = ("Total Debt", "Long Term Debt")
-CASH_KEYS = (
-    "Cash And Cash Equivalents",
-    "Cash Cash Equivalents And Short Term Investments",
-    "Cash Financial",
-)
+TOTAL_DEBT_KEYS = ("total_debt",)
+CASH_KEYS = ("cash",)
 
 DEFAULT_EBIT_MARGIN = 0.15
 DEFAULT_DA_PCT = 0.05
@@ -312,7 +304,9 @@ if __name__ == "__main__":
     valuator = DCFValuator()
 
     print("Fetching AAPL financials...")
-    financials = fetcher.get_all_financials("AAPL", years=5)
+    financials = fetcher.get_all_for_ticker("AAPL")
+    if financials is None:
+        raise SystemExit("Ticker AAPL not found on FMP")
 
     assumptions = valuator.compute_assumptions_from_history(financials)
     result = valuator.run_dcf(financials, assumptions)
