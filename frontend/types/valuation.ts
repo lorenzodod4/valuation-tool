@@ -12,7 +12,28 @@ export interface CompanyProfile {
   shares_outstanding: number | null;
   beta: number | null;
   description: string | null;
+  exchange?: string | null;
+  exchange_full_name?: string | null;
 }
+
+export type WACCBreakdown = {
+  risk_free_rate: number;
+  equity_risk_premium: number;
+  beta: number;
+  beta_source: string;
+  cost_of_equity: number;
+  cost_of_debt_pretax: number;
+  tax_rate: number;
+  cost_of_debt_aftertax: number;
+  market_cap: number;
+  total_debt: number;
+  weight_equity: number;
+  weight_debt: number;
+  wacc: number;
+  data_as_of: string;
+  rf_source: string;
+  erp_source: string;
+};
 
 export interface DCFAssumptions {
   revenue_growth_rates?: number[];
@@ -46,6 +67,7 @@ export interface DCFResult {
   current_price: number | null;
   upside_pct: number | null;
   assumptions_used: Record<string, unknown>;
+  wacc_breakdown?: WACCBreakdown | null;
   warnings: string[];
 }
 

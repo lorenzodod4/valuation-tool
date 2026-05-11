@@ -86,9 +86,6 @@ export function Header() {
         <Link href="/about" className="nav-link">
           About
         </Link>
-        <a href="#" className="nav-link">
-          Docs
-        </a>
         <ThemeToggle />
         <span className="live-pill">
           <span className="live-dot" aria-hidden="true" />

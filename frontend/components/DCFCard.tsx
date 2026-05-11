@@ -1,9 +1,128 @@
-import type { DCFResult } from "@/types/valuation";
+import type { DCFResult, WACCBreakdown } from "@/types/valuation";
 import {
   abbreviateNumber,
   formatCurrency,
   formatPercent,
 } from "@/lib/format";
+
+const DEFAULT_DEBT_PRETAX = 0.045;
+
+function pctFmt(n: number | null | undefined, decimals: number = 2): string {
+  if (n == null || !Number.isFinite(n)) return "—";
+  return `${(n * 100).toFixed(decimals)}%`;
+}
+
+function isWaccDataStale(dataAsOf: string | undefined | null): boolean {
+  if (!dataAsOf) return false;
+  const asOf = new Date(dataAsOf);
+  if (Number.isNaN(asOf.getTime())) return false;
+  const days = (Date.now() - asOf.getTime()) / (1000 * 60 * 60 * 24);
+  return days > 180;
+}
+
+interface WaccRow {
+  label: string;
+  value: string;
+  note?: string;
+  highlight?: boolean;
+  final?: boolean;
+}
+
+function WaccBreakdownView({ breakdown }: { breakdown: WACCBreakdown }) {
+  const stale = isWaccDataStale(breakdown.data_as_of);
+  // Heuristic: when the configured default surfaces, treat as a fallback.
+  const debtPretaxIsDefault =
+    Math.abs(breakdown.cost_of_debt_pretax - DEFAULT_DEBT_PRETAX) < 0.0001;
+
+  const rows: WaccRow[] = [
+    {
+      label: "Risk-free rate",
+      value: pctFmt(breakdown.risk_free_rate),
+      note: breakdown.rf_source,
+    },
+    {
+      label: "Equity risk premium",
+      value: pctFmt(breakdown.equity_risk_premium),
+      note: breakdown.erp_source,
+    },
+    {
+      label: "Beta (β)",
+      value: breakdown.beta.toFixed(3),
+      note: breakdown.beta_source,
+    },
+    {
+      label: "Cost of equity (Re)",
+      value: pctFmt(breakdown.cost_of_equity),
+      note: "Rf + β × ERP",
+      highlight: true,
+    },
+    {
+      label: "Cost of debt pretax",
+      value: pctFmt(breakdown.cost_of_debt_pretax),
+      note: debtPretaxIsDefault ? "default fallback" : "derived from financials",
+    },
+    {
+      label: "Tax rate",
+      value: pctFmt(breakdown.tax_rate),
+      note: "from latest income statement",
+    },
+    {
+      label: "Cost of debt after-tax (Rd × (1−t))",
+      value: pctFmt(breakdown.cost_of_debt_aftertax),
+      highlight: true,
+    },
+    {
+      label: "Equity weight (E/V)",
+      value: pctFmt(breakdown.weight_equity, 1),
+    },
+    {
+      label: "Debt weight (D/V)",
+      value: pctFmt(breakdown.weight_debt, 1),
+    },
+    {
+      label: "WACC",
+      value: pctFmt(breakdown.wacc),
+      final: true,
+    },
+  ];
+
+  return (
+    <div className="wacc-breakdown-section">
+      <div className="wacc-breakdown-title-row">
+        <h4 className="wacc-breakdown-title">WACC Breakdown</h4>
+        <span className="wacc-breakdown-source">
+          Source: Damodaran, Jan 2026
+        </span>
+      </div>
+
+      <div className="wacc-rows">
+        {rows.map((row) => {
+          const cls = row.final
+            ? "wacc-row wacc-row-final"
+            : row.highlight
+              ? "wacc-row wacc-row-highlight"
+              : "wacc-row";
+          return (
+            <div key={row.label} className={cls}>
+              <div className="wacc-row-label">{row.label}</div>
+              <div className="wacc-row-value">{row.value}</div>
+              <div className="wacc-row-note">{row.note ?? ""}</div>
+            </div>
+          );
+        })}
+      </div>
+
+      {stale ? (
+        <div className="wacc-stale-warning">
+          WACC inputs may be stale (last updated {breakdown.data_as_of}).
+          Consider refreshing manually.
+        </div>
+      ) : (
+        <div className="wacc-footnote">Inputs as of {breakdown.data_as_of}</div>
+      )}
+    </div>
+  );
+}
 
 interface DCFCardProps {
   dcf: DCFResult;
@@ -120,6 +239,10 @@ export function DCFCard({ dcf }: DCFCardProps) {
           ))}
         </div>
       </div>
+
+      {dcf.wacc_breakdown ? (
+        <WaccBreakdownView breakdown={dcf.wacc_breakdown} />
+      ) : null}
 
       {dcf.warnings.length > 0 ? (
         <div className="dcf-warnings">

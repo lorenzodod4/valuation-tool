@@ -1,4 +1,5 @@
 import type { FullValuation } from "@/types/valuation";
+import { CompanyProfileBlock } from "@/components/CompanyProfileBlock";
 import { DCFCard } from "@/components/DCFCard";
 import { FootballField, type FootballFieldMethod } from "@/components/FootballField";
 import { MultiplesCard } from "@/components/MultiplesCard";
@@ -59,6 +60,8 @@ export function ValuationContent({ data }: ValuationContentProps) {
       <ValuationTickerHeader profile={profile} />
 
       <div className="valuation-sections">
+        <CompanyProfileBlock profile={profile} />
+
         <section className="valuation-section">
           <header className="section-header">
             <div className="section-title-group">

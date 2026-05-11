@@ -1759,6 +1759,232 @@ body {
   height: 280px;
 }
 
+/* === Company profile block === */
+
+.profile-block-grid {
+  display: grid;
+  grid-template-columns: 3fr 2fr;
+  gap: 24px;
+}
+
+.profile-block-about {
+  min-width: 0;
+}
+
+.profile-block-section-label {
+  margin-bottom: 14px;
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+}
+
+.profile-description {
+  position: relative;
+  max-height: 200px;
+  overflow: hidden;
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--text-primary);
+  white-space: pre-wrap;
+}
+
+.profile-description.expanded {
+  max-height: none;
+}
+
+.profile-fade-overlay {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 60px;
+  background: linear-gradient(
+    to bottom,
+    transparent 0%,
+    var(--bg-card-hover) 100%
+  );
+  pointer-events: none;
+}
+
+.profile-show-more {
+  margin-top: 10px;
+  padding: 0;
+  background: transparent;
+  border: none;
+  font-family: var(--font-geist-mono), ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  color: var(--accent);
+  cursor: pointer;
+  transition: color 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.profile-show-more:hover {
+  color: var(--accent-hover);
+}
+
+.profile-no-desc {
+  font-size: 13px;
+  color: var(--text-tertiary);
+}
+
+.profile-pills {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.profile-pill {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  background: var(--bg-input);
+  border: 0.5px solid var(--border-default);
+  border-radius: 8px;
+}
+
+.profile-pill-label {
+  font-family: var(--font-geist-mono), ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text-quaternary);
+}
+
+.profile-pill-value {
+  font-family: var(--font-geist-mono), ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 13px;
+  color: var(--text-primary);
+  text-align: right;
+}
+
+/* === WACC breakdown sub-section === */
+
+.wacc-breakdown-section {
+  margin-top: 24px;
+}
+
+.wacc-breakdown-title-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 16px;
+  margin-bottom: 12px;
+}
+
+.wacc-breakdown-title {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  color: var(--text-secondary);
+}
+
+.wacc-breakdown-source {
+  font-family: var(--font-geist-mono), ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  color: var(--text-quaternary);
+  text-align: right;
+}
+
+.wacc-rows {
+  display: flex;
+  flex-direction: column;
+}
+
+.wacc-row {
+  display: grid;
+  grid-template-columns: 1fr 100px 1.4fr;
+  gap: 12px;
+  align-items: center;
+  padding: 8px 0;
+  border-bottom: 0.5px solid var(--border-default);
+  font-size: 12px;
+}
+
+.wacc-row:last-child {
+  border-bottom: none;
+}
+
+.wacc-row-label {
+  color: var(--text-secondary);
+}
+
+.wacc-row-value {
+  font-family: var(--font-geist-mono), ui-monospace, SFMono-Regular, Menlo, monospace;
+  color: var(--text-primary);
+  text-align: right;
+}
+
+.wacc-row-note {
+  font-size: 10px;
+  color: var(--text-tertiary);
+  text-align: right;
+}
+
+.wacc-row-highlight {
+  background: var(--bg-input);
+  border-radius: 6px;
+  padding: 8px 12px;
+  margin-left: -12px;
+  margin-right: -12px;
+  border-bottom: none;
+}
+.wacc-row-highlight .wacc-row-label,
+.wacc-row-highlight .wacc-row-value {
+  font-weight: 500;
+}
+.wacc-row-highlight .wacc-row-label {
+  color: var(--text-primary);
+}
+
+.wacc-row-final {
+  background: linear-gradient(
+    to right,
+    var(--indigo-soft) 0%,
+    transparent 100%
+  );
+  border: 0.5px solid var(--indigo-border);
+  border-radius: 8px;
+  padding: 14px 16px;
+  margin: 12px -16px 0;
+  border-bottom: none;
+  font-size: 14px;
+}
+.wacc-row-final .wacc-row-label {
+  font-weight: 500;
+  color: var(--text-primary);
+}
+.wacc-row-final .wacc-row-value {
+  font-size: 18px;
+  font-weight: 500;
+  color: var(--accent);
+}
+.wacc-row-final .wacc-row-note {
+  color: var(--text-tertiary);
+}
+
+.wacc-footnote {
+  margin-top: 10px;
+  font-size: 10px;
+  font-style: italic;
+  color: var(--text-quaternary);
+}
+
+.wacc-stale-warning {
+  margin-top: 10px;
+  padding: 8px 12px;
+  background: var(--bear-soft);
+  border: 0.5px solid var(--bear-border);
+  border-radius: 6px;
+  font-size: 12px;
+  color: var(--bear);
+}
+
 /* ================================================================== */
 /* Mobile responsive — keep desktop-first rules above, override below. */
 /* ================================================================== */
@@ -1882,6 +2108,21 @@ body {
   .about-title {
     font-size: 32px;
   }
+
+  /* Profile block — stack the two columns */
+  .profile-block-grid {
+    grid-template-columns: 1fr;
+    gap: 20px;
+  }
+
+  /* WACC breakdown — tighter padding, note can wrap below value if needed */
+  .wacc-row {
+    grid-template-columns: 1fr 90px 1.2fr;
+    gap: 8px;
+  }
+  .wacc-row-final .wacc-row-value {
+    font-size: 16px;
+  }
 }
 
 @media (max-width: 480px) {
@@ -1910,6 +2151,28 @@ body {
   .error-actions {
     flex-direction: column;
     align-items: stretch;
+  }
+
+  /* WACC breakdown — drop the source/note column, stack value under label */
+  .wacc-row {
+    grid-template-columns: 1fr auto;
+    font-size: 11px;
+    padding: 6px 0;
+  }
+  .wacc-row-note {
+    display: none;
+  }
+  .wacc-row-highlight {
+    padding: 6px 10px;
+    margin-left: -10px;
+    margin-right: -10px;
+  }
+  .wacc-row-final {
+    padding: 12px 12px;
+    margin: 10px -12px 0;
+  }
+  .wacc-row-final .wacc-row-value {
+    font-size: 15px;
   }
 }
 
