@@ -59,7 +59,7 @@ export default function AboutPage() {
           Valuation.io is a self-serve equity research toolkit. Type any
           US-listed ticker, get a discounted cash flow model, comparable
           trading multiples, and a football-field summary — all sourced from
-          Yahoo Finance, computed in seconds.
+          Financial Modeling Prep, computed in seconds.
         </p>
 
         <p className="about-body">
@@ -110,7 +110,7 @@ export default function AboutPage() {
         </div>
 
         <div className="about-footnote">
-          v0.1.0 · Spring 2026 · Built with Next.js, FastAPI, and yfinance
+          v0.2.0 · May 2026 · Built with Next.js, FastAPI, and Financial Modeling Prep
         </div>
       </div>
     </main>

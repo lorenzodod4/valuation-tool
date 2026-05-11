@@ -13,7 +13,7 @@ export default function HomePage() {
       <div className="glow-2" aria-hidden="true" />
 
       <div className="page-content">
-        <a href="#" className="new-pill">
+        <Link href="/methodology" className="new-pill">
           <span className="new-badge">NEW</span>
           <span className="new-text">
             Multi-scenario DCF with sensitivity tables
@@ -21,7 +21,7 @@ export default function HomePage() {
           <span className="new-arrow" aria-hidden="true">
             →
           </span>
-        </a>
+        </Link>
 
         <div className="kicker">
           <span className="kicker-line" aria-hidden="true" />
@@ -37,7 +37,7 @@ export default function HomePage() {
 
         <p className="hero-sub">
           Enter any US-listed ticker. Get DCF, comparable multiples, and a
-          football-field summary, sourced from Yahoo Finance.
+          football-field summary, sourced from Financial Modeling Prep.
         </p>
 
         <div style={{ marginBottom: 18 }}>
@@ -56,7 +56,7 @@ export default function HomePage() {
       </div>
 
       <div className="footer-bar">
-        <span>DATA · YAHOO FINANCE · DELAYED 15M</span>
+        <span>DATA · FINANCIAL MODELING PREP · DELAYED 15M</span>
         <Link href="/about" className="footer-credit">
           BUILT BY {AUTHOR.name.toUpperCase()}
         </Link>

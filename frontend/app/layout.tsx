@@ -17,7 +17,7 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "Valuation Tool",
   description:
-    "Instant company valuation: DCF, multiples, and football field analysis from Yahoo Finance data.",
+    "Instant company valuation: DCF, multiples, and football field analysis from Financial Modeling Prep data.",
 };
 
 export const viewport: Viewport = {

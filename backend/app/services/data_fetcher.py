@@ -88,13 +88,30 @@ class FinancialDataFetcher:
     # ---------------- public API ----------------
 
     def get_profile(self, symbol: str) -> dict[str, Any] | None:
-        """Fetch and normalize a company profile. Returns None if ticker not found."""
+        """Fetch and normalize a company profile. Returns None if ticker not found.
+
+        The FMP /stable/profile endpoint no longer includes `pe_ratio` or
+        `peg_ratio`, so we enrich the result with TTM ratios. The enrichment
+        is best-effort: if /ratios-ttm fails, the profile still returns
+        successfully with these fields left at None.
+        """
         sym = symbol.upper()
         data = self._request("/profile", {"symbol": sym}, f"profile:{sym}")
         if not data:
             return None
         raw = data[0] if isinstance(data, list) else data
-        return self._normalize_profile(raw)
+        profile = self._normalize_profile(raw)
+
+        try:
+            ratios = self.get_ratios_ttm(sym)
+        except Exception:
+            ratios = None
+        if ratios:
+            profile["pe_ratio"] = ratios.get("pe_ratio")
+            # PEG ratio is the closest forward-looking proxy on the free tier.
+            profile["forward_pe"] = ratios.get("peg_ratio")
+
+        return profile
 
     def get_income_statement(
         self, symbol: str, limit: int = 5
@@ -335,6 +352,11 @@ class FinancialDataFetcher:
             "market_cap": market_cap,
             "price": price,
             "shares_outstanding": shares_outstanding,
+            # P/E TTM and PEG ratio are not in the /stable/profile payload;
+            # populated downstream in `get_profile` from /ratios-ttm. Declared
+            # here so the keys always exist on the returned dict.
+            "pe_ratio": None,
+            "forward_pe": None,
             "exchange": raw.get("exchange"),
             "exchange_full_name": raw.get("exchangeFullName"),
             "ipo_date": raw.get("ipoDate"),

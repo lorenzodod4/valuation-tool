@@ -156,6 +156,16 @@ export function ValuationContent({
           <MultiplesCard multiples={multiples} />
         </section>
       </div>
+
+      <div className="valuation-disclaimer">
+        <p className="disclaimer-text">
+          ⚠ This tool is for educational and informational purposes only.
+          The outputs are not investment advice or a recommendation to buy
+          or sell any security. Auto-derived assumptions are starting
+          points, not conclusions. Always consult licensed financial
+          professionals before making investment decisions.
+        </p>
+      </div>
     </>
   );
 }

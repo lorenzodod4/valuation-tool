@@ -84,9 +84,9 @@ export function SensitivityHeatmap({
       <div className="sensitivity-legend">
         <div className="sensitivity-legend-bar" aria-hidden="true" />
         <div className="sensitivity-legend-labels">
-          <span>−20%</span>
-          <span>Current price</span>
-          <span>+20%</span>
+          <span>Below market by 20%+</span>
+          <span>Around market</span>
+          <span>Above market by 20%+</span>
         </div>
       </div>
     </div>
