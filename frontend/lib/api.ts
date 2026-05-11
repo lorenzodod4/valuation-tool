@@ -3,7 +3,9 @@ import type {
   DCFAssumptions,
   DCFResult,
   FullValuation,
+  HistoricalFinancials,
   MultiplesResult,
+  SensitivityTable,
 } from "@/types/valuation";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
@@ -70,4 +72,20 @@ export function getMultiples(
 
 export function getFullValuation(ticker: string): Promise<FullValuation> {
   return request<FullValuation>(`/api/valuation/${encode(ticker)}/full`);
+}
+
+export function fetchHistoricalFinancials(
+  ticker: string,
+): Promise<HistoricalFinancials> {
+  return request<HistoricalFinancials>(
+    `/api/valuation/${encode(ticker)}/historical-financials`,
+  );
+}
+
+export function fetchSensitivity(
+  ticker: string,
+): Promise<SensitivityTable> {
+  return request<SensitivityTable>(
+    `/api/valuation/${encode(ticker)}/sensitivity`,
+  );
 }

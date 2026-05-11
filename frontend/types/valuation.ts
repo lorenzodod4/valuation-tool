@@ -130,3 +130,22 @@ export interface FullValuation {
   dcf: DCFResult;
   multiples: MultiplesResult;
 }
+
+export type HistoricalFinancials = {
+  symbol: string;
+  historical: Array<{
+    year: number;
+    revenue: number;
+    ebitda: number;
+    net_income: number;
+    operating_income: number;
+  }>;
+};
+
+export type SensitivityTable = {
+  symbol: string;
+  wacc_values: number[];
+  terminal_growth_values: number[];
+  grid: (number | null)[][];
+  current_price: number | null;
+};

@@ -40,6 +40,9 @@ export function ValuationSkeleton({ ticker }: ValuationSkeletonProps) {
         <div className="skeleton-card" />
         <div className="skeleton-card" />
         <div className="skeleton-card" />
+        <div className="skeleton-card skeleton-card-chart" />
+        <div className="skeleton-card skeleton-card-grid" />
+        <div className="skeleton-card" />
       </div>
     </>
   );

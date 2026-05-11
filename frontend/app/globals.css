@@ -166,6 +166,12 @@
   --focus-ring: rgba(99, 102, 241, 0.12);
   --accent-text-soft: #4F46E5;
   --indigo-soft-hover: rgba(99, 102, 241, 0.14);
+  --bull-strong-bg: rgba(22, 163, 74, 0.30);
+  --bull-medium-bg: rgba(22, 163, 74, 0.18);
+  --bull-soft-bg: rgba(22, 163, 74, 0.10);
+  --bear-strong-bg: rgba(220, 38, 38, 0.28);
+  --bear-medium-bg: rgba(220, 38, 38, 0.18);
+  --bear-soft-bg: rgba(220, 38, 38, 0.10);
 }
 
 [data-theme="dark"] {
@@ -205,6 +211,12 @@
   --focus-ring: rgba(99, 102, 241, 0.15);
   --accent-text-soft: #C7D2FE;
   --indigo-soft-hover: rgba(99, 102, 241, 0.18);
+  --bull-strong-bg: rgba(52, 211, 153, 0.35);
+  --bull-medium-bg: rgba(52, 211, 153, 0.22);
+  --bull-soft-bg: rgba(52, 211, 153, 0.12);
+  --bear-strong-bg: rgba(251, 113, 133, 0.35);
+  --bear-medium-bg: rgba(251, 113, 133, 0.22);
+  --bear-soft-bg: rgba(251, 113, 133, 0.12);
 }
 
 html,
@@ -2157,6 +2169,152 @@ body {
   text-decoration: underline;
 }
 
+/* === Historical financials chart === */
+
+.historical-chart-container {
+  width: 100%;
+  height: 320px;
+}
+
+.historical-empty {
+  padding: 24px;
+  text-align: center;
+  font-size: 13px;
+  color: var(--text-tertiary);
+}
+
+.historical-note {
+  margin-bottom: 8px;
+  font-family: var(--font-geist-mono), ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  color: var(--text-quaternary);
+  text-align: right;
+}
+
+/* === Sensitivity heatmap === */
+
+.sensitivity-heatmap {
+  margin-top: 24px;
+  max-width: 720px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.sensitivity-axis-top {
+  margin-bottom: 6px;
+  margin-left: 100px;
+  font-family: var(--font-geist-mono), ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  color: var(--text-quaternary);
+}
+
+.sensitivity-body {
+  display: flex;
+  align-items: stretch;
+  gap: 8px;
+}
+
+.sensitivity-axis-left {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  writing-mode: vertical-rl;
+  transform: rotate(180deg);
+  font-family: var(--font-geist-mono), ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  color: var(--text-quaternary);
+  white-space: nowrap;
+}
+
+.sensitivity-grid-scroll {
+  flex: 1;
+  overflow-x: auto;
+}
+
+.sensitivity-grid {
+  display: grid;
+  grid-template-columns: 80px repeat(5, 1fr);
+  gap: 2px;
+  min-width: 540px;
+}
+
+.sensitivity-corner {
+  padding: 8px;
+}
+
+.sensitivity-cell-header {
+  padding: 8px 4px;
+  font-family: var(--font-geist-mono), ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  color: var(--text-tertiary);
+  text-align: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.sensitivity-cell {
+  position: relative;
+  padding: 14px 10px;
+  border: 0.5px solid var(--border-default);
+  border-radius: 4px;
+  transition: background-color 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.sensitivity-cell-data {
+  text-align: center;
+  font-family: var(--font-geist-mono), ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-primary);
+}
+
+.sensitivity-legend {
+  margin: 18px auto 0;
+  max-width: 320px;
+}
+
+.sensitivity-legend-bar {
+  height: 8px;
+  border-radius: 4px;
+  background: linear-gradient(
+    to right,
+    var(--bear-strong-bg) 0%,
+    var(--bear-soft-bg) 25%,
+    transparent 50%,
+    var(--bull-soft-bg) 75%,
+    var(--bull-strong-bg) 100%
+  );
+}
+
+.sensitivity-legend-labels {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 6px;
+  font-family: var(--font-geist-mono), ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  color: var(--text-quaternary);
+}
+
+/* === Skeleton variants for the new sections === */
+
+.skeleton-card-chart {
+  height: 320px;
+}
+
+.skeleton-card-grid {
+  height: 360px;
+}
+
 /* ================================================================== */
 /* Mobile responsive — keep desktop-first rules above, override below. */
 /* ================================================================== */
@@ -2307,6 +2465,38 @@ body {
   .wacc-row-final .wacc-row-value {
     font-size: 16px;
   }
+
+  /* Historical chart shrinks */
+  .historical-chart-container {
+    height: 260px;
+  }
+  .skeleton-card-chart {
+    height: 260px;
+  }
+  .skeleton-card-grid {
+    height: 320px;
+  }
+
+  /* Sensitivity heatmap — drop the vertical-text axis label, allow scroll */
+  .sensitivity-axis-top {
+    margin-left: 0;
+  }
+  .sensitivity-body {
+    gap: 4px;
+  }
+  .sensitivity-axis-left {
+    display: none;
+  }
+  .sensitivity-grid {
+    min-width: 520px;
+    grid-template-columns: 70px repeat(5, 1fr);
+  }
+  .sensitivity-cell {
+    padding: 10px 6px;
+  }
+  .sensitivity-cell-data {
+    font-size: 12px;
+  }
 }
 
 @media (max-width: 480px) {
@@ -2335,6 +2525,18 @@ body {
   .error-actions {
     flex-direction: column;
     align-items: stretch;
+  }
+
+  /* Sensitivity heatmap — tighten further on phones */
+  .sensitivity-cell {
+    padding: 8px 4px;
+  }
+  .sensitivity-cell-data {
+    font-size: 11px;
+  }
+  .sensitivity-cell-header {
+    font-size: 10px;
+    padding: 6px 2px;
   }
 
   /* WACC breakdown — drop the source/note column, stack value under label */

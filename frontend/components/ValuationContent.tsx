@@ -1,15 +1,27 @@
-import type { FullValuation } from "@/types/valuation";
+import type {
+  FullValuation,
+  HistoricalFinancials,
+  SensitivityTable,
+} from "@/types/valuation";
 import { CompanyProfileBlock } from "@/components/CompanyProfileBlock";
 import { DCFCard } from "@/components/DCFCard";
 import { FootballField, type FootballFieldMethod } from "@/components/FootballField";
+import { HistoricalChart } from "@/components/HistoricalChart";
 import { MultiplesCard } from "@/components/MultiplesCard";
+import { SensitivityHeatmap } from "@/components/SensitivityHeatmap";
 import { ValuationTickerHeader } from "@/components/ValuationTickerHeader";
 
 interface ValuationContentProps {
   data: FullValuation;
+  historical?: HistoricalFinancials | null;
+  sensitivity?: SensitivityTable | null;
 }
 
-export function ValuationContent({ data }: ValuationContentProps) {
+export function ValuationContent({
+  data,
+  historical,
+  sensitivity,
+}: ValuationContentProps) {
   const { profile, dcf, multiples } = data;
   const peers = multiples.peers_used;
   const peerLabel =
@@ -55,6 +67,8 @@ export function ValuationContent({ data }: ValuationContentProps) {
       ? `5-year projection · ${(wacc * 100).toFixed(2)}% WACC · ${(tg * 100).toFixed(2)}% terminal growth`
       : "5-year projection";
 
+  const hasHistorical = !!historical && historical.historical.length > 0;
+
   return (
     <>
       <ValuationTickerHeader profile={profile} />
@@ -86,10 +100,43 @@ export function ValuationContent({ data }: ValuationContentProps) {
           <DCFCard dcf={dcf} />
         </section>
 
+        {hasHistorical ? (
+          <section className="valuation-section">
+            <header className="section-header">
+              <div className="section-title-group">
+                <span className="section-num">03</span>
+                <span className="section-title">Historical Financials</span>
+              </div>
+              <span className="section-subtitle">
+                Five-year trend of revenue, EBITDA, and net income — a sanity
+                check before projecting forward.
+              </span>
+            </header>
+            <HistoricalChart data={historical!.historical} />
+          </section>
+        ) : null}
+
+        {sensitivity ? (
+          <section className="valuation-section">
+            <header className="section-header">
+              <div className="section-title-group">
+                <span className="section-num">04</span>
+                <span className="section-title">Sensitivity Analysis</span>
+              </div>
+              <span className="section-subtitle">
+                Per-share DCF value across a range of WACC and terminal growth
+                assumptions. Green: implied value above current price. Red:
+                below.
+              </span>
+            </header>
+            <SensitivityHeatmap data={sensitivity} />
+          </section>
+        ) : null}
+
         <section className="valuation-section">
           <header className="section-header">
             <div className="section-title-group">
-              <span className="section-num">03</span>
+              <span className="section-num">05</span>
               <span className="section-title">Trading Comparables</span>
             </div>
             <span className="section-subtitle">{peerLabel}</span>

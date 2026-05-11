@@ -177,6 +177,76 @@ def get_full_valuation(ticker: str) -> dict:
     return {"profile": profile, "dcf": dcf_result, "multiples": multiples_result}
 
 
+@router.get("/{ticker}/historical-financials")
+def get_historical_financials(ticker: str) -> dict:
+    """Return 5 years of historical income items in chronological order."""
+    bundle = _fetch_all(ticker)
+    income = bundle.get("income_statement") or []
+
+    sorted_income = sorted(
+        (item for item in income if item.get("year") is not None),
+        key=lambda x: x["year"],
+    )
+
+    if not sorted_income:
+        raise HTTPException(
+            status_code=404,
+            detail=f"No historical data for {ticker.upper()}",
+        )
+
+    data = [
+        {
+            "year": int(item["year"]),
+            "revenue": item.get("revenue") or 0,
+            "ebitda": item.get("ebitda") or 0,
+            "net_income": item.get("net_income") or 0,
+            "operating_income": item.get("operating_income") or 0,
+        }
+        for item in sorted_income
+    ]
+
+    return {"symbol": ticker.upper(), "historical": data}
+
+
+@router.get("/{ticker}/sensitivity")
+def get_sensitivity(ticker: str) -> dict:
+    """Compute DCF per-share value across a 5×5 WACC × terminal-growth grid."""
+    financials = _fetch_all(ticker)
+    base_assumptions = _dcf.compute_assumptions_from_history(financials)
+
+    wacc_values = [0.07, 0.08, 0.09, 0.10, 0.11]
+    terminal_growth_values = [0.015, 0.020, 0.025, 0.030, 0.035]
+
+    try:
+        table = _dcf.sensitivity_table(
+            financials,
+            base_assumptions,
+            wacc_range=wacc_values,
+            terminal_growth_range=terminal_growth_values,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+    # sensitivity_table returns matrix[wacc_idx][tg_idx]; transpose to
+    # grid[tg_idx][wacc_idx] so the frontend can render rows = terminal growth.
+    matrix = table["matrix"]
+    n_tg = len(terminal_growth_values)
+    n_wacc = len(wacc_values)
+    grid: list[list[float | None]] = [
+        [matrix[wi][ti] for wi in range(n_wacc)] for ti in range(n_tg)
+    ]
+
+    profile = financials.get("profile") or {}
+
+    return {
+        "symbol": ticker.upper(),
+        "wacc_values": wacc_values,
+        "terminal_growth_values": terminal_growth_values,
+        "grid": grid,
+        "current_price": profile.get("price"),
+    }
+
+
 @router.get("/{ticker}/wacc-breakdown")
 def get_wacc_breakdown(ticker: str) -> dict:
     """Return the WACC breakdown for the given ticker, with sources cited."""

@@ -1,8 +1,16 @@
 "use client";
 
 import { use, useEffect, useState } from "react";
-import { getFullValuation } from "@/lib/api";
-import type { FullValuation } from "@/types/valuation";
+import {
+  fetchHistoricalFinancials,
+  fetchSensitivity,
+  getFullValuation,
+} from "@/lib/api";
+import type {
+  FullValuation,
+  HistoricalFinancials,
+  SensitivityTable,
+} from "@/types/valuation";
 import { ValuationContent } from "@/components/ValuationContent";
 import { ValuationError } from "@/components/ValuationError";
 import { ValuationSkeleton } from "@/components/ValuationSkeleton";
@@ -16,6 +24,12 @@ export default function ValuationPage({ params }: ValuationPageProps) {
   const ticker = rawTicker.toUpperCase();
 
   const [data, setData] = useState<FullValuation | null>(null);
+  const [historical, setHistorical] = useState<HistoricalFinancials | null>(
+    null,
+  );
+  const [sensitivity, setSensitivity] = useState<SensitivityTable | null>(
+    null,
+  );
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -24,10 +38,18 @@ export default function ValuationPage({ params }: ValuationPageProps) {
     setLoading(true);
     setError(null);
 
-    getFullValuation(ticker)
-      .then((result) => {
+    Promise.all([
+      // Primary fetch — if this fails the whole page errors out.
+      getFullValuation(ticker),
+      // Best-effort fetches — section silently skipped on failure.
+      fetchHistoricalFinancials(ticker).catch(() => null),
+      fetchSensitivity(ticker).catch(() => null),
+    ])
+      .then(([valuation, hist, sens]) => {
         if (cancelled) return;
-        setData(result);
+        setData(valuation);
+        setHistorical(hist);
+        setSensitivity(sens);
         setLoading(false);
       })
       .catch((err: unknown) => {
@@ -53,7 +75,11 @@ export default function ValuationPage({ params }: ValuationPageProps) {
         ) : error ? (
           <ValuationError ticker={ticker} message={error} />
         ) : data ? (
-          <ValuationContent data={data} />
+          <ValuationContent
+            data={data}
+            historical={historical}
+            sensitivity={sensitivity}
+          />
         ) : null}
       </div>
     </main>
