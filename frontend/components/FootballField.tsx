@@ -76,7 +76,7 @@ export function FootballField({ currentPrice, methods }: FootballFieldProps) {
 
   if (!colors) {
     // Initial paint before useEffect resolves CSS vars; keeps the layout stable.
-    return <div style={{ height: 280 }} />;
+    return <div className="ff-container" />;
   }
 
   const maxVal = Math.max(
@@ -121,8 +121,9 @@ export function FootballField({ currentPrice, methods }: FootballFieldProps) {
 
   return (
     <div>
-      <ResponsiveContainer width="100%" height={280}>
-        <BarChart
+      <div className="ff-container">
+        <ResponsiveContainer width="100%" height="100%">
+          <BarChart
           layout="vertical"
           data={methods}
           margin={{ top: 30, right: 80, bottom: 10, left: 20 }}
@@ -168,6 +169,7 @@ export function FootballField({ currentPrice, methods }: FootballFieldProps) {
           </Bar>
         </BarChart>
       </ResponsiveContainer>
+      </div>
 
       <div className="ff-legend">
         {methods.map((m) => (

@@ -40,23 +40,9 @@ export function Header() {
     return () => window.clearInterval(id);
   }, []);
 
-  const monoStyle = {
-    fontFamily:
-      "var(--font-geist-mono), ui-monospace, SFMono-Regular, Menlo, monospace",
-  } as const;
-
   return (
-    <header
-      className="sticky top-0 z-50 flex items-center justify-between"
-      style={{
-        padding: "14px 32px",
-        background: "var(--bg-header)",
-        backdropFilter: "blur(12px)",
-        WebkitBackdropFilter: "blur(12px)",
-        borderBottom: "0.5px solid var(--border-default)",
-      }}
-    >
-      <div className="flex items-center" style={{ gap: 32 }}>
+    <header className="app-header">
+      <div className="app-header-left">
         <Link href="/" className="brand-link">
           <CandleLogo size={{ width: 26, height: 20 }} />
           <span className="brand-name">
@@ -64,10 +50,7 @@ export function Header() {
           </span>
         </Link>
 
-        <div
-          className="flex items-center"
-          style={{ ...monoStyle, fontSize: 11, letterSpacing: "0.04em" }}
-        >
+        <div className="ticker-bar">
           <div className="ticker-cell">
             <span className="t-label">SPX</span>
             <span className="t-up">5847.32</span>
@@ -89,19 +72,11 @@ export function Header() {
         </div>
       </div>
 
-      <div className="flex items-center" style={{ gap: 18 }}>
+      <div className="app-header-right">
         <span
           aria-label="Current time"
           suppressHydrationWarning
-          style={{
-            ...monoStyle,
-            fontSize: 10,
-            color: "var(--text-quaternary)",
-            letterSpacing: "0.08em",
-            fontVariantNumeric: "tabular-nums",
-            minWidth: 180,
-            textAlign: "right",
-          }}
+          className="header-timestamp"
         >
           {stamp}
         </span>
