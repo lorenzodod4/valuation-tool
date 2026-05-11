@@ -2,6 +2,8 @@
 
 from typing import Any
 
+from app.services.wacc import compute_wacc
+
 
 REVENUE_KEY = "revenue"
 
@@ -31,6 +33,8 @@ class DCFValuator:
         warnings: list[str] = []
         income: list[dict[str, Any]] = financials.get("income_statement") or []
         cashflow: list[dict[str, Any]] = financials.get("cash_flow") or []
+        balance: list[dict[str, Any]] = financials.get("balance_sheet") or []
+        profile: dict[str, Any] = financials.get("profile") or {}
 
         terminal_growth = DEFAULT_TERMINAL_GROWTH
 
@@ -68,14 +72,42 @@ class DCFValuator:
             warnings=warnings, label="Change in WC % of revenue",
         )
 
+        # Effective tax rate from latest income statement, clamped to [0%, 35%].
+        tax_rate = DEFAULT_TAX_RATE
+        if income:
+            pretax = income[0].get("pretax_income")
+            tax = income[0].get("income_tax")
+            if pretax and pretax > 0 and tax is not None:
+                derived = tax / pretax
+                tax_rate = max(0.0, min(0.35, derived))
+
+        # WACC from CAPM cost of equity + debt-weighted cost of debt.
+        latest_balance = balance[0] if balance else {}
+        latest_income = income[0] if income else {}
+        wacc_result = compute_wacc(
+            market_cap=profile.get("market_cap"),
+            total_debt=latest_balance.get("total_debt"),
+            beta=profile.get("beta"),
+            interest_expense=latest_income.get("interest_expense"),
+            tax_rate=tax_rate,
+        )
+        wacc = wacc_result["wacc"] if wacc_result["wacc"] is not None else DEFAULT_WACC
+        wacc_breakdown = wacc_result.get("breakdown")
+        if wacc_result.get("warning"):
+            warnings.append(
+                f"WACC computation fell back to default {DEFAULT_WACC:.2%}: "
+                f"{wacc_result['warning']}"
+            )
+
         return {
             "revenue_growth_rates": growth_rates,
             "ebit_margin": ebit_margin,
-            "tax_rate": DEFAULT_TAX_RATE,
+            "tax_rate": tax_rate,
             "da_pct_revenue": da_pct,
             "capex_pct_revenue": capex_pct,
             "wc_change_pct_revenue": wc_change_pct,
-            "wacc": DEFAULT_WACC,
+            "wacc": wacc,
+            "wacc_breakdown": wacc_breakdown,
             "terminal_growth_rate": terminal_growth,
             "historical_cagr_3y": raw_cagr,
             "ebit_source_field": ebit_field,
@@ -170,6 +202,7 @@ class DCFValuator:
             "current_price": current_price,
             "upside_pct": upside_pct,
             "assumptions_used": assumptions,
+            "wacc_breakdown": assumptions.get("wacc_breakdown"),
             "warnings": warnings,
         }
 

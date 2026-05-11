@@ -13,6 +13,7 @@ from app.models.schemas import (
 from app.services.data_fetcher import FinancialDataFetcher
 from app.services.dcf import DCFValuator
 from app.services.multiples import MultiplesValuator
+from app.services.wacc import compute_wacc, is_data_stale
 
 
 router = APIRouter(prefix="/api/valuation", tags=["valuation"])
@@ -119,6 +120,10 @@ def post_dcf_custom(ticker: str, overrides: DCFAssumptions) -> dict:
     financials = _fetch_all(ticker)
     assumptions = _dcf.compute_assumptions_from_history(financials)
     overrides_dict = overrides.model_dump(exclude_none=True)
+    # If the user overrides WACC, the auto-derived breakdown is no longer truthful
+    # — clear it so the response doesn't claim a derivation that wasn't used.
+    if "wacc" in overrides_dict:
+        assumptions["wacc_breakdown"] = None
     assumptions.update(overrides_dict)
     try:
         return _dcf.run_dcf(financials, assumptions)
@@ -170,3 +175,39 @@ def get_full_valuation(ticker: str) -> dict:
         )
 
     return {"profile": profile, "dcf": dcf_result, "multiples": multiples_result}
+
+
+@router.get("/{ticker}/wacc-breakdown")
+def get_wacc_breakdown(ticker: str) -> dict:
+    """Return the WACC breakdown for the given ticker, with sources cited."""
+    bundle = _fetch_all(ticker)
+    profile = bundle["profile"]
+    income = bundle.get("income_statement") or []
+    balance = bundle.get("balance_sheet") or []
+
+    # Effective tax rate from the latest income statement, clamped to [0%, 35%].
+    tax_rate = 0.21
+    if income:
+        pretax = income[0].get("pretax_income")
+        tax = income[0].get("income_tax")
+        if pretax and pretax > 0 and tax is not None:
+            tax_rate = max(0.0, min(0.35, tax / pretax))
+
+    interest_exp = income[0].get("interest_expense") if income else None
+    total_debt = balance[0].get("total_debt") if balance else None
+
+    wacc_result = compute_wacc(
+        market_cap=profile.get("market_cap"),
+        total_debt=total_debt,
+        beta=profile.get("beta"),
+        interest_expense=interest_exp,
+        tax_rate=tax_rate,
+    )
+
+    return {
+        "symbol": ticker.upper(),
+        "wacc": wacc_result["wacc"],
+        "breakdown": wacc_result["breakdown"],
+        "data_stale": is_data_stale(),
+        "warning": wacc_result.get("warning"),
+    }

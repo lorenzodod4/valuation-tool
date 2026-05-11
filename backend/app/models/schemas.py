@@ -43,6 +43,29 @@ class DCFAssumptions(BaseModel):
     terminal_growth_rate: float | None = None
 
 
+class WACCBreakdown(BaseModel):
+    """Per-ticker WACC decomposition with sources cited."""
+
+    model_config = ConfigDict(extra="ignore")
+
+    risk_free_rate: float | None = None
+    equity_risk_premium: float | None = None
+    beta: float | None = None
+    beta_source: str | None = None
+    cost_of_equity: float | None = None
+    cost_of_debt_pretax: float | None = None
+    tax_rate: float | None = None
+    cost_of_debt_aftertax: float | None = None
+    market_cap: float | None = None
+    total_debt: float | None = None
+    weight_equity: float | None = None
+    weight_debt: float | None = None
+    wacc: float | None = None
+    data_as_of: str | None = None
+    rf_source: str | None = None
+    erp_source: str | None = None
+
+
 class DCFResult(BaseModel):
     projections: list[dict[str, Any]]
     terminal_value: float
@@ -55,6 +78,7 @@ class DCFResult(BaseModel):
     current_price: float | None = None
     upside_pct: float | None = None
     assumptions_used: dict[str, Any]
+    wacc_breakdown: WACCBreakdown | None = None
     warnings: list[str] = []
 
 

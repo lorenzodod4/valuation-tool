@@ -1,25 +1,80 @@
 """Financial Modeling Prep data fetcher (FMP /stable endpoints, sync httpx)."""
 
+import threading
 import time
+from datetime import datetime, timezone
 from typing import Any
 
 import httpx
-from cachetools import TTLCache
 
 from app.config import (
-    CACHE_MAXSIZE,
-    CACHE_TTL_SECONDS,
-    FMP_API_KEY,
+    FMP_API_KEYS,
     FMP_BASE_URL,
     HTTP_TIMEOUT_SECONDS,
 )
+from app.services.cache import PersistentCache
+
+
+class KeyRotator:
+    """Rotates across multiple FMP API keys when individual ones hit daily 429.
+
+    Behavior:
+    - `get_current_key()` returns the first key not in the exhausted set.
+    - `mark_exhausted(key)` records a key as out-of-quota for the rest of the day.
+    - The exhausted set is wiped automatically on UTC date rollover.
+    """
+
+    def __init__(self, keys: list[str]) -> None:
+        if not keys:
+            raise RuntimeError("KeyRotator requires at least one FMP API key.")
+        self._keys: list[str] = list(keys)
+        self._exhausted_today: set[str] = set()
+        self._last_reset_date = datetime.now(timezone.utc).date()
+        self._lock = threading.Lock()
+
+    def _maybe_reset(self) -> None:
+        today = datetime.now(timezone.utc).date()
+        if today > self._last_reset_date:
+            self._exhausted_today.clear()
+            self._last_reset_date = today
+
+    def get_current_key(self) -> str:
+        with self._lock:
+            self._maybe_reset()
+            for idx, key in enumerate(self._keys, start=1):
+                if key not in self._exhausted_today:
+                    print(
+                        f"[KeyRotator] Using key #{idx} (last 4: ...{key[-4:]})",
+                        flush=True,
+                    )
+                    return key
+            raise RuntimeError(
+                "All FMP keys exhausted today. Resets at 00:00 UTC."
+            )
+
+    def mark_exhausted(self, key: str) -> None:
+        with self._lock:
+            try:
+                idx: Any = self._keys.index(key) + 1
+            except ValueError:
+                idx = "?"
+            print(
+                f"[KeyRotator] Marking key #{idx} as exhausted "
+                f"(last 4: ...{key[-4:]})",
+                flush=True,
+            )
+            self._exhausted_today.add(key)
+
+
+# Module-level singleton — shared across every FinancialDataFetcher instance.
+_rotator = KeyRotator(FMP_API_KEYS)
 
 
 class FinancialDataFetcher:
     """Fetches and normalizes financial data from the FMP /stable API."""
 
     _client: httpx.Client | None = None
-    _cache: TTLCache | None = None
+    _cache: PersistentCache | None = None
 
     def __init__(self) -> None:
         if FinancialDataFetcher._client is None:
@@ -28,9 +83,7 @@ class FinancialDataFetcher:
                 timeout=HTTP_TIMEOUT_SECONDS,
             )
         if FinancialDataFetcher._cache is None:
-            FinancialDataFetcher._cache = TTLCache(
-                maxsize=CACHE_MAXSIZE, ttl=CACHE_TTL_SECONDS
-            )
+            FinancialDataFetcher._cache = PersistentCache()
 
     # ---------------- public API ----------------
 
@@ -91,7 +144,7 @@ class FinancialDataFetcher:
         data = self._request(
             "/key-metrics-ttm",
             {"symbol": sym},
-            f"keymetrics:{sym}",
+            f"metrics:{sym}",
         )
         if not data:
             return None
@@ -157,55 +210,75 @@ class FinancialDataFetcher:
     ) -> Any:
         cache = FinancialDataFetcher._cache
         assert cache is not None
-        if cache_key in cache:
-            return cache[cache_key]
+        cached = cache.get(cache_key)
+        if cached is not None:
+            return cached
 
         client = FinancialDataFetcher._client
         assert client is not None
 
-        full_params = {**params, "apikey": FMP_API_KEY}
-
-        for attempt in range(2):
+        # Outer loop: rotate through API keys when one returns 429.
+        while True:
             try:
-                response = client.get(path, params=full_params)
-            except httpx.RequestError as exc:
-                if attempt == 0:
-                    time.sleep(1)
-                    continue
+                current_key = _rotator.get_current_key()
+            except RuntimeError:
                 raise RuntimeError(
-                    f"Network error contacting FMP: {exc}"
-                ) from exc
-
-            status = response.status_code
-            if status in (401, 403):
-                raise PermissionError("Invalid FMP API key")
-            if status == 402:
-                raise PermissionError(
-                    "Ticker requires premium FMP subscription. "
-                    "This tool supports US-listed equities on the free tier."
-                )
-            if status == 429:
-                raise RuntimeError("FMP rate limit reached")
-            if status >= 500:
-                if attempt == 0:
-                    time.sleep(1)
-                    continue
-                raise RuntimeError(f"FMP server error ({status})")
-            if status >= 400:
-                raise RuntimeError(
-                    f"FMP request failed ({status}): {response.text[:200]}"
+                    "All FMP keys exhausted today. Resets at 00:00 UTC."
                 )
 
-            try:
-                data = response.json()
-            except ValueError as exc:
-                raise RuntimeError(f"Invalid JSON from FMP: {exc}") from exc
+            full_params = {**params, "apikey": current_key}
 
-            cache[cache_key] = data
-            return data
+            # Inner loop: one network/5xx retry on the same key.
+            rotated_for_429 = False
+            for attempt in range(2):
+                try:
+                    response = client.get(path, params=full_params)
+                except httpx.RequestError as exc:
+                    if attempt == 0:
+                        time.sleep(1)
+                        continue
+                    raise RuntimeError(
+                        f"Network error contacting FMP: {exc}"
+                    ) from exc
 
-        # Unreachable: both attempts should have either returned or raised.
-        raise RuntimeError("FMP request failed after retry")
+                status = response.status_code
+                if status in (401, 403):
+                    raise PermissionError("Invalid FMP API key")
+                if status == 402:
+                    raise PermissionError(
+                        "Ticker requires premium FMP subscription. "
+                        "This tool supports US-listed equities on the free tier."
+                    )
+                if status == 429:
+                    # Burn this key for the day, fall back to outer loop for next.
+                    _rotator.mark_exhausted(current_key)
+                    rotated_for_429 = True
+                    break
+                if status >= 500:
+                    if attempt == 0:
+                        time.sleep(1)
+                        continue
+                    raise RuntimeError(f"FMP server error ({status})")
+                if status >= 400:
+                    raise RuntimeError(
+                        f"FMP request failed ({status}): {response.text[:200]}"
+                    )
+
+                try:
+                    data = response.json()
+                except ValueError as exc:
+                    raise RuntimeError(f"Invalid JSON from FMP: {exc}") from exc
+
+                cache.set(cache_key, data)
+                return data
+
+            if rotated_for_429:
+                # Re-enter outer loop; get_current_key picks the next key
+                # (or raises if every key is exhausted).
+                continue
+
+            # Inner loop exited without success and without rotation.
+            raise RuntimeError("FMP request failed after retry")
 
     # ---------------- normalization ----------------
 
@@ -229,8 +302,8 @@ class FinancialDataFetcher:
 
     @classmethod
     def _normalize_profile(cls, raw: dict[str, Any]) -> dict[str, Any]:
-        # FMP profile uses `marketCap` (not `mktCap`) and no longer returns `pe`
-        # or `sharesOutstanding`. We derive shares from market_cap / price.
+        # FMP profile uses `marketCap` (not `mktCap`) and no longer returns
+        # `pe` or `sharesOutstanding`. We derive shares from market_cap / price.
         market_cap = cls._to_float(raw.get("marketCap"))
         price = cls._to_float(raw.get("price"))
         shares_outstanding: float | None = None
@@ -265,11 +338,12 @@ class FinancialDataFetcher:
             "revenue": cls._to_float(raw.get("revenue")),
             "ebitda": cls._to_float(raw.get("ebitda")),
             "operating_income": operating_income,
-            # Alias so existing callers using "ebit" keep working.
+            # Alias so callers using "ebit" keep working.
             "ebit": operating_income,
             "net_income": cls._to_float(raw.get("netIncome")),
             "pretax_income": cls._to_float(raw.get("incomeBeforeTax")),
             "income_tax": cls._to_float(raw.get("incomeTaxExpense")),
+            "interest_expense": cls._to_float(raw.get("interestExpense")),
             "da": cls._to_float(raw.get("depreciationAndAmortization")),
         }
 
@@ -292,12 +366,15 @@ class FinancialDataFetcher:
                 raw.get("totalCurrentLiabilities")
             ),
             "common_stock_value": cls._to_float(raw.get("commonStock")),
+            "shares_outstanding": cls._to_float(
+                raw.get("commonStockSharesOutstanding")
+            ),
         }
 
     @classmethod
     def _normalize_cashflow(cls, raw: dict[str, Any]) -> dict[str, Any]:
-        # FMP reports CapEx as a negative outflow; the rest of the codebase wants the
-        # positive magnitude, so absolute-value at the boundary.
+        # FMP reports CapEx as a negative outflow; the rest of the codebase
+        # wants the positive magnitude, so absolute-value at the boundary.
         capex_raw = cls._to_float(raw.get("capitalExpenditure"))
         capex = abs(capex_raw) if capex_raw is not None else None
         return {
@@ -311,9 +388,6 @@ class FinancialDataFetcher:
 
     @classmethod
     def _normalize_key_metrics(cls, raw: dict[str, Any]) -> dict[str, Any]:
-        # FMP's key-metrics-ttm no longer carries pe / p_book; those moved to
-        # ratios-ttm. EV/EBITDA was also renamed from
-        # `enterpriseValueOverEBITDATTM` to `evToEBITDATTM`.
         return {
             "market_cap": cls._to_float(raw.get("marketCap")),
             "enterprise_value": cls._to_float(raw.get("enterpriseValueTTM")),
@@ -328,7 +402,9 @@ class FinancialDataFetcher:
         return {
             "pe_ratio": cls._to_float(raw.get("priceToEarningsRatioTTM")),
             "p_book": cls._to_float(raw.get("priceToBookRatioTTM")),
-            "peg_ratio": cls._to_float(raw.get("priceToEarningsGrowthRatioTTM")),
+            "peg_ratio": cls._to_float(
+                raw.get("priceToEarningsGrowthRatioTTM")
+            ),
         }
 
 
@@ -350,7 +426,7 @@ if __name__ == "__main__":
             latest = income[0]
             print(f"Latest year:    {latest.get('year')}")
             print(f"Latest revenue: {latest.get('revenue')}")
-            print(f"Net income:    {latest.get('net_income')}")
+            print(f"Net income:     {latest.get('net_income')}")
+            print(f"Interest exp:   {latest.get('interest_expense')}")
         km = bundle.get("key_metrics_ttm") or {}
-        print(f"TTM P/E:        {km.get('pe_ratio')}")
         print(f"TTM EV/EBITDA:  {km.get('ev_ebitda')}")
