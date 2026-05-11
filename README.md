@@ -113,4 +113,6 @@ Built by Lorenzo Dodero, an ESCP student.
 
 ## License
 
-MIT
+© 2026 Lorenzo Dodero. All rights reserved.
+
+This project is published for portfolio and educational purposes. No commercial use, redistribution, or derivative works are permitted without explicit written permission from the author. Feel free to study the code and learn from it. For inquiries about reuse or collaboration, contact me via LinkedIn.
