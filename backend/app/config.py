@@ -11,14 +11,15 @@ def _collect_keys() -> list[str]:
     """Read FMP keys in priority order. Empty/missing slots are skipped.
 
     Priority:
-      FMP_API_KEY_1 → FMP_API_KEY_2 → FMP_API_KEY_3
+      FMP_API_KEY_1 → FMP_API_KEY_2 → FMP_API_KEY_3 → FMP_API_KEY_4
     `FMP_API_KEY` (no suffix) is honored as a fallback for slot #1 so older
     deployments keep working.
     """
     primary = os.getenv("FMP_API_KEY_1") or os.getenv("FMP_API_KEY") or ""
     secondary = os.getenv("FMP_API_KEY_2") or ""
     tertiary = os.getenv("FMP_API_KEY_3") or ""
-    return [k for k in (primary, secondary, tertiary) if k]
+    quaternary = os.getenv("FMP_API_KEY_4") or ""
+    return [k for k in (primary, secondary, tertiary, quaternary) if k]
 
 
 FMP_API_KEYS: list[str] = _collect_keys()

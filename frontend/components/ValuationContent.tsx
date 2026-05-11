@@ -5,6 +5,7 @@ import type {
 } from "@/types/valuation";
 import { CompanyProfileBlock } from "@/components/CompanyProfileBlock";
 import { DCFCard } from "@/components/DCFCard";
+import { ExportPDFButton } from "@/components/ExportPDFButton";
 import { FootballField, type FootballFieldMethod } from "@/components/FootballField";
 import { HistoricalChart } from "@/components/HistoricalChart";
 import { MultiplesCard } from "@/components/MultiplesCard";
@@ -72,6 +73,14 @@ export function ValuationContent({
   return (
     <>
       <ValuationTickerHeader profile={profile} />
+
+      <div className="export-pdf-row">
+        <ExportPDFButton
+          valuation={data}
+          historical={historical}
+          sensitivity={sensitivity}
+        />
+      </div>
 
       <div className="valuation-sections">
         <CompanyProfileBlock profile={profile} />
