@@ -170,6 +170,12 @@ export function DCFCard({ dcf }: DCFCardProps) {
 
   return (
     <div>
+      {dcf.sector_warning ? (
+        <div className="dcf-sector-warning" role="note">
+          <span className="dcf-sector-warning-icon" aria-hidden="true">⚠️</span>
+          <span>{dcf.sector_warning.message}</span>
+        </div>
+      ) : null}
       <div className="dcf-metrics">
         <div className="dcf-metric">
           <div className="dcf-metric-label">Per Share Value</div>

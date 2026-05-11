@@ -129,7 +129,10 @@ export function ValuationContent({
                 below.
               </span>
             </header>
-            <SensitivityHeatmap data={sensitivity} />
+            <SensitivityHeatmap
+              data={sensitivity}
+              sectorWarning={dcf.sector_warning ?? null}
+            />
           </section>
         ) : null}
 

@@ -55,6 +55,11 @@ export interface DCFProjection {
   pv_fcff: number;
 }
 
+export interface SectorWarning {
+  type: "dcf_unsuitable" | string;
+  message: string;
+}
+
 export interface DCFResult {
   projections: DCFProjection[];
   terminal_value: number;
@@ -69,6 +74,7 @@ export interface DCFResult {
   assumptions_used: Record<string, unknown>;
   wacc_breakdown?: WACCBreakdown | null;
   warnings: string[];
+  sector_warning?: SectorWarning | null;
 }
 
 export interface PeerMultiples {

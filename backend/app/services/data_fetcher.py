@@ -52,7 +52,7 @@ class KeyRotator:
                 "All FMP keys exhausted today. Resets at 00:00 UTC."
             )
 
-    def mark_exhausted(self, key: str) -> None:
+    def mark_exhausted(self, key: str, reason: str = "429") -> None:
         with self._lock:
             try:
                 idx: Any = self._keys.index(key) + 1
@@ -60,7 +60,7 @@ class KeyRotator:
                 idx = "?"
             print(
                 f"[KeyRotator] Marking key #{idx} as exhausted "
-                f"(last 4: ...{key[-4:]})",
+                f"(reason: {reason}, last 4: ...{key[-4:]})",
                 flush=True,
             )
             self._exhausted_today.add(key)
@@ -217,11 +217,23 @@ class FinancialDataFetcher:
         client = FinancialDataFetcher._client
         assert client is not None
 
-        # Outer loop: rotate through API keys when one returns 429.
+        # Track per-key quota-style failures so the final error can distinguish
+        # "every key is premium-locked for this ticker" (all 402) from "every
+        # key is over its daily call budget" (any 429 in the mix).
+        attempts: list[tuple[str, int]] = []
+
+        # Outer loop: rotate through API keys when one returns 402 or 429.
         while True:
             try:
                 current_key = _rotator.get_current_key()
             except RuntimeError:
+                # No keys left to try — synthesize the most informative error
+                # we can from what each key actually returned.
+                if attempts and all(status == 402 for _, status in attempts):
+                    raise PermissionError(
+                        "Ticker requires premium FMP subscription on all "
+                        "available keys. This may be a non-US listed equity."
+                    )
                 raise RuntimeError(
                     "All FMP keys exhausted today. Resets at 00:00 UTC."
                 )
@@ -229,7 +241,7 @@ class FinancialDataFetcher:
             full_params = {**params, "apikey": current_key}
 
             # Inner loop: one network/5xx retry on the same key.
-            rotated_for_429 = False
+            rotated_for_quota = False
             for attempt in range(2):
                 try:
                     response = client.get(path, params=full_params)
@@ -244,15 +256,15 @@ class FinancialDataFetcher:
                 status = response.status_code
                 if status in (401, 403):
                     raise PermissionError("Invalid FMP API key")
-                if status == 402:
-                    raise PermissionError(
-                        "Ticker requires premium FMP subscription. "
-                        "This tool supports US-listed equities on the free tier."
-                    )
-                if status == 429:
-                    # Burn this key for the day, fall back to outer loop for next.
-                    _rotator.mark_exhausted(current_key)
-                    rotated_for_429 = True
+                if status in (402, 429):
+                    # 402 from a single key doesn't mean the ticker is premium-
+                    # only — FMP returns 402 inconsistently when a specific key
+                    # is downgraded/restricted. Same response as 429: burn the
+                    # key for the day and let the outer loop pick the next one.
+                    reason = "402" if status == 402 else "429"
+                    _rotator.mark_exhausted(current_key, reason=reason)
+                    attempts.append((current_key, status))
+                    rotated_for_quota = True
                     break
                 if status >= 500:
                     if attempt == 0:
@@ -272,9 +284,10 @@ class FinancialDataFetcher:
                 cache.set(cache_key, data)
                 return data
 
-            if rotated_for_429:
+            if rotated_for_quota:
                 # Re-enter outer loop; get_current_key picks the next key
-                # (or raises if every key is exhausted).
+                # (or raises if every key is exhausted, at which point the
+                # branch at the top synthesizes the final error).
                 continue
 
             # Inner loop exited without success and without rotation.

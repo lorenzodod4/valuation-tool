@@ -82,6 +82,15 @@ TV = FCFF₅ × (1 + g) / (WACC − g)`}
               </code>{" "}
               endpoint.
             </p>
+            <p>
+              <strong>A note on financials and REITs:</strong> DCF is not the
+              standard valuation methodology for banks, insurance companies,
+              asset managers, or REITs. For these sectors, the tool will
+              display the DCF output with a warning. In practice, equity
+              research and investment banking rely on Dividend Discount
+              Models (DDM) and Trading Comparables for financial institutions.
+              Implementing DDM is a planned enhancement (roadmap).
+            </p>
           </div>
         </section>
 

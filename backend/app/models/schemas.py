@@ -66,6 +66,14 @@ class WACCBreakdown(BaseModel):
     erp_source: str | None = None
 
 
+class SectorWarning(BaseModel):
+    """Non-fatal advisory attached to a DCF result for sectors where DCF
+    is not the standard valuation methodology (banks, REITs)."""
+
+    type: str
+    message: str
+
+
 class DCFResult(BaseModel):
     projections: list[dict[str, Any]]
     terminal_value: float
@@ -80,6 +88,7 @@ class DCFResult(BaseModel):
     assumptions_used: dict[str, Any]
     wacc_breakdown: WACCBreakdown | None = None
     warnings: list[str] = []
+    sector_warning: SectorWarning | None = None
 
 
 class MultiplesResult(BaseModel):

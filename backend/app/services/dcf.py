@@ -24,6 +24,20 @@ DEFAULT_WACC = 0.09
 DEFAULT_TERMINAL_GROWTH = 0.025
 GROWTH_CAP = 0.15
 
+# Sectors where DCF is not the textbook methodology — DDM and comparables
+# are typically used instead. We still compute the DCF, but tag the result
+# so the UI can warn the user.
+FINANCIAL_SECTORS_REQUIRING_WARNING = {
+    "Financial Services",
+    "Real Estate",
+}
+_SECTOR_WARNING_MESSAGE = (
+    "DCF is generally not the standard valuation methodology for financial "
+    "institutions and REITs. For these sectors, Trading Comparables "
+    "(peer-based multiples) and Dividend Discount Models are typically more "
+    "reliable. Treat these DCF outputs as illustrative only."
+)
+
 
 class DCFValuator:
     """Compute a 5-year DCF valuation from a financials bundle."""
@@ -190,6 +204,14 @@ class DCFValuator:
         else:
             upside_pct = None
 
+        sector = (profile.get("sector") or "").strip()
+        sector_warning: dict[str, str] | None = None
+        if sector in FINANCIAL_SECTORS_REQUIRING_WARNING:
+            sector_warning = {
+                "type": "dcf_unsuitable",
+                "message": _SECTOR_WARNING_MESSAGE,
+            }
+
         return {
             "projections": projections,
             "terminal_value": terminal_value,
@@ -204,6 +226,7 @@ class DCFValuator:
             "assumptions_used": assumptions,
             "wacc_breakdown": assumptions.get("wacc_breakdown"),
             "warnings": warnings,
+            "sector_warning": sector_warning,
         }
 
     def sensitivity_table(

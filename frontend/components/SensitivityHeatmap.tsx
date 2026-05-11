@@ -2,10 +2,11 @@
 
 import { Fragment } from "react";
 import { formatCurrency } from "@/lib/format";
-import type { SensitivityTable } from "@/types/valuation";
+import type { SectorWarning, SensitivityTable } from "@/types/valuation";
 
 interface SensitivityHeatmapProps {
   data: SensitivityTable;
+  sectorWarning?: SectorWarning | null;
 }
 
 function getCellColor(
@@ -28,11 +29,20 @@ function fmtPct(n: number): string {
   return `${(n * 100).toFixed(1)}%`;
 }
 
-export function SensitivityHeatmap({ data }: SensitivityHeatmapProps) {
+export function SensitivityHeatmap({
+  data,
+  sectorWarning,
+}: SensitivityHeatmapProps) {
   const { wacc_values, terminal_growth_values, grid, current_price } = data;
 
   return (
     <div className="sensitivity-heatmap">
+      {sectorWarning ? (
+        <div className="dcf-sector-warning" role="note">
+          <span className="dcf-sector-warning-icon" aria-hidden="true">⚠️</span>
+          <span>{sectorWarning.message}</span>
+        </div>
+      ) : null}
       <div className="sensitivity-axis-top">WACC →</div>
       <div className="sensitivity-body">
         <div className="sensitivity-axis-left">↓ Terminal Growth</div>
