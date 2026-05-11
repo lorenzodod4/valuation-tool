@@ -80,9 +80,9 @@ export function Header() {
         >
           {stamp}
         </span>
-        <a href="#" className="nav-link">
+        <Link href="/methodology" className="nav-link">
           Methodology
-        </a>
+        </Link>
         <Link href="/about" className="nav-link">
           About
         </Link>

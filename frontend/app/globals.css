@@ -1985,6 +1985,178 @@ body {
   color: var(--bear);
 }
 
+/* === Methodology page === */
+
+.methodology-page {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  min-height: calc(100vh - 65px);
+  display: flex;
+  flex-direction: column;
+}
+
+.methodology-content {
+  position: relative;
+  z-index: 1;
+  flex: 1;
+  width: 100%;
+  max-width: 760px;
+  margin: 0 auto;
+  padding: 80px 32px 80px;
+}
+
+.methodology-intro {
+  margin: 0 0 48px;
+  font-size: 16px;
+  line-height: 1.65;
+  color: var(--text-secondary);
+}
+
+.method-section {
+  margin-bottom: 56px;
+  padding-bottom: 40px;
+  border-bottom: 0.5px solid var(--border-default);
+}
+
+.method-section-num {
+  margin-bottom: 8px;
+  font-family: var(--font-geist-mono), ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11px;
+  letter-spacing: 0.1em;
+  color: var(--text-quaternary);
+}
+
+.method-section-title {
+  margin: 0 0 12px;
+  font-size: 24px;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+  color: var(--text-primary);
+}
+
+.method-section-subtitle {
+  margin: 0 0 28px;
+  font-size: 14px;
+  font-style: italic;
+  line-height: 1.5;
+  color: var(--text-tertiary);
+}
+
+.method-body p {
+  margin: 0 0 20px;
+  font-size: 15px;
+  line-height: 1.7;
+  color: var(--text-secondary);
+}
+
+.method-body p strong,
+.method-body li strong {
+  color: var(--text-primary);
+  font-weight: 500;
+}
+
+.method-body ul {
+  list-style: none;
+  padding-left: 0;
+  margin: 0 0 24px;
+}
+
+.method-body li {
+  position: relative;
+  margin-bottom: 12px;
+  padding-left: 22px;
+  font-size: 15px;
+  line-height: 1.7;
+  color: var(--text-secondary);
+}
+
+.method-body li::before {
+  content: "—";
+  position: absolute;
+  left: 0;
+  color: var(--text-quaternary);
+}
+
+.method-formula {
+  margin: 24px 0;
+  padding: 16px 20px;
+  font-family: var(--font-geist-mono), ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 13px;
+  line-height: 1.8;
+  color: var(--text-primary);
+  background: var(--bg-input);
+  border: 0.5px solid var(--border-default);
+  border-radius: 8px;
+  white-space: pre-line;
+  overflow-x: auto;
+}
+
+.method-inline-code {
+  padding: 2px 6px;
+  font-family: var(--font-geist-mono), ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.9em;
+  color: var(--text-primary);
+  background: var(--bg-input);
+  border: 0.5px solid var(--border-default);
+  border-radius: 4px;
+}
+
+.method-limitations h2 {
+  margin: 56px 0 20px;
+  font-size: 20px;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+  color: var(--text-primary);
+}
+
+.method-limitations ul {
+  list-style: none;
+  padding-left: 0;
+  margin: 0;
+}
+
+.method-limitations li {
+  position: relative;
+  margin-bottom: 14px;
+  padding-left: 20px;
+  font-size: 15px;
+  line-height: 1.7;
+  color: var(--text-secondary);
+}
+
+.method-limitations li::before {
+  content: "•";
+  position: absolute;
+  left: 0;
+  color: var(--accent);
+}
+
+.method-footer {
+  margin-top: 56px;
+  padding-top: 32px;
+  border-top: 0.5px solid var(--border-default);
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--text-tertiary);
+}
+
+.method-footer strong {
+  color: var(--text-primary);
+  font-weight: 500;
+}
+
+.method-footer a {
+  color: var(--accent);
+  text-decoration: none;
+  transition: color 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.method-footer a:hover {
+  color: var(--accent-hover);
+  text-decoration: underline;
+}
+
 /* ================================================================== */
 /* Mobile responsive — keep desktop-first rules above, override below. */
 /* ================================================================== */
@@ -2113,6 +2285,18 @@ body {
   .profile-block-grid {
     grid-template-columns: 1fr;
     gap: 20px;
+  }
+
+  /* Methodology */
+  .methodology-content {
+    padding: 60px 20px 40px;
+  }
+  .method-section-title {
+    font-size: 20px;
+  }
+  .method-formula {
+    padding: 14px 16px;
+    font-size: 12px;
   }
 
   /* WACC breakdown — tighter padding, note can wrap below value if needed */
