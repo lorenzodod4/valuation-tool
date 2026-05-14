@@ -31,6 +31,10 @@ const COLORS = {
   accent: "#4F46E5",
   bull: "#16A34A",
   bear: "#DC2626",
+  // Cyan-600 — slightly darker than the web's #06B6D4 for better print
+  // contrast on white. Used for the EV/EBITDA football-field bar so it
+  // stays clearly distinct from the indigo P/E bar.
+  cyan: "#0891B2",
   warningBg: "#FEF3F2",
   warningText: "#991B1B",
   rowAlt: "#F5F5F5",
@@ -200,6 +204,19 @@ const styles = StyleSheet.create({
     bottom: -2,
     width: 1,
     backgroundColor: COLORS.text,
+  },
+  // Base-value tick drawn on top of the range bar. White interior + thin dark
+  // border keeps it crisp on any bar color in print. Centered via a -1pt
+  // marginLeft on the absolute-positioned element (width 2pt).
+  ffBaseMarker: {
+    position: "absolute",
+    top: -2,
+    bottom: -2,
+    width: 2,
+    marginLeft: -1,
+    backgroundColor: "#FFFFFF",
+    borderWidth: 0.5,
+    borderColor: COLORS.text,
   },
   ffValueLabel: {
     width: 56,
@@ -592,31 +609,74 @@ function MetricCard4({ label, value }: MetricProps) {
 
 interface FootballFieldBarProps {
   label: string;
-  value: number;
+  base: number;
+  low: number | null;
+  high: number | null;
+  color: string;
   maxValue: number;
   currentPrice: number | null;
 }
 function FootballFieldBar({
   label,
-  value,
+  base,
+  low,
+  high,
+  color,
   maxValue,
   currentPrice,
 }: FootballFieldBarProps) {
-  const pct = Math.min(100, Math.max(0, (value / maxValue) * 100));
+  // Valid range = both bounds present, finite, and strictly ordered.
+  const hasRange =
+    low != null &&
+    high != null &&
+    Number.isFinite(low) &&
+    Number.isFinite(high) &&
+    high > low;
+
+  // Bar geometry as percentages of the track width. For a range bar the
+  // colored segment starts at `low` and spans `high − low`; for the degraded
+  // single-point fallback it runs from 0 to `base` (same as before this
+  // sprint) and we skip the base marker because the bar's right edge already
+  // represents the value.
+  const barLeftPct = hasRange
+    ? Math.max(0, Math.min(100, ((low as number) / maxValue) * 100))
+    : 0;
+  const rawSpan = hasRange
+    ? (((high as number) - (low as number)) / maxValue) * 100
+    : (base / maxValue) * 100;
+  const barWidthPct = Math.max(0, Math.min(100 - barLeftPct, rawSpan));
+
+  const markerPct = hasRange
+    ? Math.max(0, Math.min(100, (base / maxValue) * 100))
+    : null;
+
   const cpPct =
     currentPrice != null && currentPrice > 0 && maxValue > 0
       ? Math.min(100, (currentPrice / maxValue) * 100)
       : null;
+
   return (
     <View style={styles.ffRow}>
       <Text style={styles.ffLabel}>{label}</Text>
       <View style={styles.ffTrack}>
-        <View style={[styles.ffBar, { width: `${pct}%` }]} />
+        <View
+          style={[
+            styles.ffBar,
+            {
+              left: `${barLeftPct}%`,
+              width: `${barWidthPct}%`,
+              backgroundColor: color,
+            },
+          ]}
+        />
+        {markerPct != null ? (
+          <View style={[styles.ffBaseMarker, { left: `${markerPct}%` }]} />
+        ) : null}
         {cpPct != null ? (
           <View style={[styles.ffCurrentPriceLine, { left: `${cpPct}%` }]} />
         ) : null}
       </View>
-      <Text style={styles.ffValueLabel}>{fmtMoney(value)}</Text>
+      <Text style={styles.ffValueLabel}>{fmtMoney(base)}</Text>
     </View>
   );
 }
@@ -632,25 +692,90 @@ interface ValuationPDFProps {
 function CoverPage({ valuation, today }: { valuation: FullValuation; today: string }) {
   const { profile, dcf, multiples } = valuation;
 
-  // Assemble football-field methods to render as horizontal bars.
-  const methods: Array<{ label: string; value: number }> = [];
-  if (dcf.per_share_value != null) {
-    methods.push({ label: "DCF", value: dcf.per_share_value });
+  // Range data lives inside dicts the shared types don't enumerate (the
+  // backend serializes them as opaque dict[str, Any]). Cast at the read site
+  // so types/valuation.ts can stay untouched. Same pattern as ValuationContent.
+  type RangedImplied = {
+    implied_per_share?: number | null;
+    implied_per_share_low?: number | null;
+    implied_per_share_high?: number | null;
+  };
+  const dcfAssumptions = dcf.assumptions_used as {
+    per_share_low?: number | null;
+    per_share_high?: number | null;
+  };
+
+  interface FFMethod {
+    label: string;
+    base: number;
+    low: number | null;
+    high: number | null;
+    color: string;
   }
-  const pe = multiples.implied_valuations.pe_based?.implied_per_share;
-  if (pe != null) methods.push({ label: "P/E", value: pe });
-  const evEbitda = multiples.implied_valuations.ev_ebitda_based?.implied_per_share;
-  if (evEbitda != null) methods.push({ label: "EV/EBITDA", value: evEbitda });
-  const evSales = multiples.implied_valuations.ev_sales_based?.implied_per_share;
-  if (evSales != null) methods.push({ label: "EV/Sales", value: evSales });
+
+  // Assemble football-field methods. Colors mirror the web version's intent:
+  // DCF = green (bull), P/E = indigo (accent), EV/EBITDA = cyan, EV/Sales =
+  // red (bear). Cyan keeps EV/EBITDA distinct from the indigo P/E bar; red
+  // doesn't collide with the current-price reference line (which uses
+  // COLORS.text, not bear, in the PDF).
+  const methods: FFMethod[] = [];
+  if (dcf.per_share_value != null) {
+    methods.push({
+      label: "DCF",
+      base: dcf.per_share_value,
+      low: dcfAssumptions.per_share_low ?? null,
+      high: dcfAssumptions.per_share_high ?? null,
+      color: COLORS.bull,
+    });
+  }
+  const pe = multiples.implied_valuations.pe_based as RangedImplied | null;
+  if (pe?.implied_per_share != null) {
+    methods.push({
+      label: "P/E",
+      base: pe.implied_per_share,
+      low: pe.implied_per_share_low ?? null,
+      high: pe.implied_per_share_high ?? null,
+      color: COLORS.accent,
+    });
+  }
+  const evEbitda = multiples.implied_valuations.ev_ebitda_based as
+    | RangedImplied
+    | null;
+  if (evEbitda?.implied_per_share != null) {
+    methods.push({
+      label: "EV/EBITDA",
+      base: evEbitda.implied_per_share,
+      low: evEbitda.implied_per_share_low ?? null,
+      high: evEbitda.implied_per_share_high ?? null,
+      color: COLORS.cyan,
+    });
+  }
+  const evSales = multiples.implied_valuations.ev_sales_based as
+    | RangedImplied
+    | null;
+  if (evSales?.implied_per_share != null) {
+    methods.push({
+      label: "EV/Sales",
+      base: evSales.implied_per_share,
+      low: evSales.implied_per_share_low ?? null,
+      high: evSales.implied_per_share_high ?? null,
+      color: COLORS.bear,
+    });
+  }
 
   const currentPrice = dcf.current_price ?? profile.price ?? null;
-  // Max value is the upper bound of the bar track; pad 10% above the largest
-  // bar so the longest bar doesn't sit flush against the right edge.
-  const seriesMax = Math.max(
-    ...methods.map((m) => m.value),
-    currentPrice ?? 0,
-  );
+  // Max value is the upper bound of the bar track; include every method's
+  // high (so range bars don't get clipped on the right) plus the bases and
+  // the current-price reference. Pad 10% above the largest so the longest
+  // bar doesn't sit flush against the right edge.
+  const maxCandidates: number[] = [];
+  for (const m of methods) {
+    if (Number.isFinite(m.base)) maxCandidates.push(m.base);
+    if (m.low != null && Number.isFinite(m.low)) maxCandidates.push(m.low);
+    if (m.high != null && Number.isFinite(m.high)) maxCandidates.push(m.high);
+  }
+  if (currentPrice != null && currentPrice > 0) maxCandidates.push(currentPrice);
+  const seriesMax = maxCandidates.length > 0 ? Math.max(...maxCandidates) : 0;
   const maxValue = seriesMax > 0 ? seriesMax * 1.1 : 1;
 
   const industryLine = [profile.industry, profile.country]
@@ -713,7 +838,10 @@ function CoverPage({ valuation, today }: { valuation: FullValuation; today: stri
             <FootballFieldBar
               key={m.label}
               label={m.label}
-              value={m.value}
+              base={m.base}
+              low={m.low}
+              high={m.high}
+              color={m.color}
               maxValue={maxValue}
               currentPrice={currentPrice}
             />
