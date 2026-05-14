@@ -86,6 +86,41 @@ class DCFValuator:
             warnings=warnings, label="Change in WC % of revenue",
         )
 
+        # Sanity check: anomalous EBIT margin. Informational only — the
+        # downstream projection uses the value as-computed so the user can
+        # still see what the math produces, but the warning makes it clear
+        # the DCF output should be taken with extra skepticism.
+        if ebit_margin < 0.0:
+            warnings.append(
+                f"Derived EBIT margin is negative ({ebit_margin:.1%}). The "
+                "company was unprofitable on average over the last 3 years — "
+                "DCF output will be unreliable."
+            )
+        elif ebit_margin < 0.02:
+            warnings.append(
+                f"Derived EBIT margin is very low ({ebit_margin:.1%}), typical "
+                "of thin-margin sectors like retail. DCF tends to undervalue "
+                "these businesses — cross-check with Trading Comparables."
+            )
+        elif ebit_margin > 0.60:
+            warnings.append(
+                f"Derived EBIT margin is unusually high ({ebit_margin:.1%}). "
+                "Verify the historical data is not distorted by one-off items."
+            )
+
+        # Sanity check: cash-flow ratios occasionally come out wild (e.g., a
+        # huge one-off CapEx year), which would break the projection. Clamp
+        # them into sane bounds and surface the adjustment.
+        da_pct = self._clamp_with_warning(
+            da_pct, 0.0, 0.25, "D&A as % of revenue", warnings
+        )
+        capex_pct = self._clamp_with_warning(
+            capex_pct, 0.0, 0.30, "CapEx as % of revenue", warnings
+        )
+        wc_change_pct = self._clamp_with_warning(
+            wc_change_pct, -0.15, 0.15, "Change in WC % of revenue", warnings
+        )
+
         # Effective tax rate from latest income statement, clamped to [0%, 35%].
         tax_rate = DEFAULT_TAX_RATE
         if income:
@@ -204,6 +239,27 @@ class DCFValuator:
         else:
             upside_pct = None
 
+        # Sanity check: extreme divergence between DCF intrinsic and market
+        # price is almost always a signal that the model is the wrong tool,
+        # not that the market is wildly mispricing. Informational only — the
+        # per-share value and upside are still returned exactly as computed.
+        if upside_pct is not None:
+            if upside_pct < -0.80:
+                warnings.append(
+                    "DCF intrinsic value is more than 80% below market price. "
+                    "This usually means the DCF model is not well-suited to "
+                    "this company — common for high-growth, asset-light, or "
+                    "platform businesses whose value is not captured by "
+                    "historical free cash flow. Trading Comparables are likely "
+                    "more meaningful here."
+                )
+            elif upside_pct > 1.50:
+                warnings.append(
+                    "DCF intrinsic value is more than 150% above market price. "
+                    "Verify the growth and margin assumptions — the model may "
+                    "be extrapolating an unsustainable trend."
+                )
+
         sector = (profile.get("sector") or "").strip()
         sector_warning: dict[str, str] | None = None
         if sector in FINANCIAL_SECTORS_REQUIRING_WARNING:
@@ -259,6 +315,36 @@ class DCFValuator:
             "terminal_growth_values": list(terminal_growth_range),
             "matrix": matrix,
         }
+
+    @staticmethod
+    def _clamp_with_warning(
+        value: float,
+        low: float,
+        high: float,
+        label: str,
+        warnings: list[str],
+    ) -> float:
+        """Clamp `value` into [low, high]; append a warning only if it bit.
+
+        Used to bound D&A / CapEx / WC ratios when historical data produces
+        out-of-range numbers (e.g., a one-off restructuring quarter that
+        balloons CapEx to 40% of revenue). The clamped value flows into the
+        projection so the model stays well-behaved; the warning surfaces the
+        adjustment to the user.
+        """
+        if value < low:
+            warnings.append(
+                f"{label} ({value:.1%}) is outside the expected range and "
+                f"was capped at {low:.1%}."
+            )
+            return low
+        if value > high:
+            warnings.append(
+                f"{label} ({value:.1%}) is outside the expected range and "
+                f"was capped at {high:.1%}."
+            )
+            return high
+        return value
 
     @staticmethod
     def _first_value(record: dict[str, Any], keys: tuple[str, ...]) -> float | None:
