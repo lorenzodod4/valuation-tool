@@ -260,6 +260,23 @@ class DCFValuator:
                     "be extrapolating an unsustainable trend."
                 )
 
+        # Narrow corner sweep around the base (wacc, terminal_growth) to give
+        # the football field a low/high range. Pure math via _per_share_for —
+        # no recursion, no warning side effects. Corners that hit invalid math
+        # (e.g. tweaked tg ≥ tweaked wacc) are simply dropped.
+        corner_values: list[float] = []
+        for w_corner in (wacc - 0.01, wacc + 0.01):
+            for tg_corner in (terminal_growth - 0.005, terminal_growth + 0.005):
+                v = self._per_share_for(financials, assumptions, w_corner, tg_corner)
+                if v is not None:
+                    corner_values.append(v)
+        if len(corner_values) >= 2:
+            assumptions["per_share_low"] = min(corner_values)
+            assumptions["per_share_high"] = max(corner_values)
+        else:
+            assumptions["per_share_low"] = None
+            assumptions["per_share_high"] = None
+
         sector = (profile.get("sector") or "").strip()
         sector_warning: dict[str, str] | None = None
         if sector in FINANCIAL_SECTORS_REQUIRING_WARNING:
@@ -315,6 +332,66 @@ class DCFValuator:
             "terminal_growth_values": list(terminal_growth_range),
             "matrix": matrix,
         }
+
+    def _per_share_for(
+        self,
+        financials: dict[str, Any],
+        assumptions: dict[str, Any],
+        wacc: float,
+        terminal_growth: float,
+    ) -> float | None:
+        """Pure DCF math: projection → terminal value → EV → equity → per share.
+
+        Used by the narrow corner sweep that produces the football-field range.
+        Returns None on any condition that would otherwise raise (wacc ≤ tg,
+        missing revenue, missing shares, etc.) so the caller can simply drop
+        that corner. Does NOT touch warnings, sanity checks, or recursion.
+        """
+        if wacc <= terminal_growth:
+            return None
+
+        income = financials.get("income_statement") or []
+        balance = financials.get("balance_sheet") or []
+        profile = financials.get("profile") or {}
+        if not income:
+            return None
+        latest_revenue = income[0].get(REVENUE_KEY)
+        if latest_revenue is None or latest_revenue <= 0:
+            return None
+
+        try:
+            growth_rates: list[float] = assumptions["revenue_growth_rates"]
+            ebit_margin: float = assumptions["ebit_margin"]
+            tax_rate: float = assumptions["tax_rate"]
+            da_pct: float = assumptions["da_pct_revenue"]
+            capex_pct: float = assumptions["capex_pct_revenue"]
+            wc_pct: float = assumptions["wc_change_pct_revenue"]
+        except KeyError:
+            return None
+
+        revenue = float(latest_revenue)
+        pv_sum = 0.0
+        fcff_year5 = 0.0
+        for year in range(1, 6):
+            revenue = revenue * (1 + growth_rates[year - 1])
+            ebit = revenue * ebit_margin
+            nopat = ebit * (1 - tax_rate)
+            fcff = nopat + revenue * da_pct - revenue * capex_pct - revenue * wc_pct
+            pv_sum += fcff / (1 + wacc) ** year
+            fcff_year5 = fcff
+
+        terminal_value = fcff_year5 * (1 + terminal_growth) / (wacc - terminal_growth)
+        pv_terminal = terminal_value / (1 + wacc) ** 5
+        enterprise_value = pv_sum + pv_terminal
+
+        total_debt = self._first_value(balance[0] if balance else {}, TOTAL_DEBT_KEYS) or 0.0
+        cash = self._first_value(balance[0] if balance else {}, CASH_KEYS) or 0.0
+        equity_value = enterprise_value - (float(total_debt) - float(cash))
+
+        shares = profile.get("shares_outstanding")
+        if not shares or shares <= 0:
+            return None
+        return equity_value / float(shares)
 
     @staticmethod
     def _clamp_with_warning(

@@ -208,11 +208,22 @@ class MultiplesValuator:
                 if p.get(metric) is not None and p[metric] > 0
             ]
             if values:
+                # p25/p75 require at least 2 data points (quantiles needs n≥2).
+                # With only one peer we have a median but can't form a range.
+                if len(values) >= 2:
+                    quartiles = statistics.quantiles(values, n=4)
+                    p25: float | None = quartiles[0]
+                    p75: float | None = quartiles[2]
+                else:
+                    p25 = None
+                    p75 = None
                 stats[metric] = {
                     "median": statistics.median(values),
                     "mean": statistics.mean(values),
                     "min": min(values),
                     "max": max(values),
+                    "p25": p25,
+                    "p75": p75,
                     "count": len(values),
                 }
             else:
@@ -221,6 +232,8 @@ class MultiplesValuator:
                     "mean": None,
                     "min": None,
                     "max": None,
+                    "p25": None,
+                    "p75": None,
                     "count": 0,
                 }
         return {"peers": peers, "statistics": stats}
@@ -260,6 +273,49 @@ class MultiplesValuator:
                 shares=shares,
             ),
         }
+
+        # Attach implied_per_share_low/high to each implied_valuations entry,
+        # derived from the p25/p75 peer multiples. The existing median-based
+        # implied_per_share stays as the base "marker"; the range gives the
+        # football field a bar to draw.
+        def _implied_ps_eq(metric_value: Any, multiple: float | None) -> float | None:
+            r = self._implied_from_equity_multiple(
+                metric_value=metric_value, multiple=multiple, shares=shares,
+            )
+            return r["implied_per_share"] if r else None
+
+        def _implied_ps_ev(metric_value: Any, multiple: float | None) -> float | None:
+            r = self._implied_from_ev_multiple(
+                metric_value=metric_value,
+                multiple=multiple,
+                net_debt=net_debt,
+                shares=shares,
+            )
+            return r["implied_per_share"] if r else None
+
+        if implied_valuations["pe_based"] is not None:
+            implied_valuations["pe_based"]["implied_per_share_low"] = _implied_ps_eq(
+                target.get("net_income"), stats["pe_ratio"].get("p25"),
+            )
+            implied_valuations["pe_based"]["implied_per_share_high"] = _implied_ps_eq(
+                target.get("net_income"), stats["pe_ratio"].get("p75"),
+            )
+
+        if implied_valuations["ev_ebitda_based"] is not None:
+            implied_valuations["ev_ebitda_based"]["implied_per_share_low"] = _implied_ps_ev(
+                target.get("ebitda"), stats["ev_ebitda"].get("p25"),
+            )
+            implied_valuations["ev_ebitda_based"]["implied_per_share_high"] = _implied_ps_ev(
+                target.get("ebitda"), stats["ev_ebitda"].get("p75"),
+            )
+
+        if implied_valuations["ev_sales_based"] is not None:
+            implied_valuations["ev_sales_based"]["implied_per_share_low"] = _implied_ps_ev(
+                target.get("revenue"), stats["ev_sales"].get("p25"),
+            )
+            implied_valuations["ev_sales_based"]["implied_per_share_high"] = _implied_ps_ev(
+                target.get("revenue"), stats["ev_sales"].get("p75"),
+            )
 
         return {
             "target_metrics": target,
