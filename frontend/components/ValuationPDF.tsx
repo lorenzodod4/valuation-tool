@@ -1,10 +1,14 @@
 import {
+  Circle,
   Document,
+  Font,
+  Line as PdfLine,
   Page,
+  Rect,
+  StyleSheet,
+  Svg,
   Text,
   View,
-  StyleSheet,
-  Font,
 } from "@react-pdf/renderer";
 import type {
   FullValuation,
@@ -48,6 +52,16 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     alignItems: "center",
     marginBottom: 6,
+  },
+  topStripLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  // Wrapper around LogoSmall — gives the mark a fixed slot with a 6pt gap to
+  // the text on its right. @react-pdf doesn't reliably honor `gap`, so we
+  // use marginRight on this wrapper instead.
+  logoSlotSmall: {
+    marginRight: 6,
   },
   topStripText: {
     fontSize: 9,
@@ -377,9 +391,30 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "center",
   },
+  // Inner row inside footer — needed so we can put the logo and the text
+  // side-by-side while the outer footer container keeps them centered.
+  footerInner: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
   footerText: {
     fontSize: 8,
     color: COLORS.textFaint,
+  },
+  // Cover-page masthead row holding LogoLarge above the ticker.
+  coverLogoRow: {
+    marginBottom: 14,
+  },
+  // "Model Notes" block on the DCF page (informational warnings).
+  modelNotes: {
+    marginTop: 14,
+  },
+  modelNoteItem: {
+    fontSize: 8.5,
+    fontStyle: "italic",
+    color: COLORS.textMuted,
+    lineHeight: 1.4,
+    marginBottom: 3,
   },
 
   // Small badge for target row in peer table.
@@ -442,6 +477,54 @@ function truncate(s: string | null | undefined, max = 1500): string {
   return s.slice(0, max).replace(/\s+\S*$/, "") + "…";
 }
 
+// ---------------- Logo marks ----------------
+
+// Five-candle rising pattern: red, green, red, green, green. Used as a
+// masthead on the cover page.
+function LogoLarge({ size = 48 }: { size?: number } = {}) {
+  // Native pixel grid is 48 × 44; pass `size` to scale the SVG canvas while
+  // letting the library upscale the inner coordinates linearly.
+  const aspect = 44 / 48;
+  return (
+    <Svg width={size} height={size * aspect} viewBox="0 0 48 44">
+      {/* Candle 1 — red, lowest */}
+      <PdfLine x1={4} y1={22} x2={4} y2={40} stroke="#DC2626" strokeWidth={1} />
+      <Rect x={1} y={26} width={6} height={9} fill="#DC2626" />
+      {/* Candle 2 — green */}
+      <PdfLine x1={14} y1={17} x2={14} y2={36} stroke="#16A34A" strokeWidth={1} />
+      <Rect x={11} y={22} width={6} height={10} fill="#16A34A" />
+      {/* Candle 3 — red */}
+      <PdfLine x1={24} y1={21} x2={24} y2={38} stroke="#DC2626" strokeWidth={1} />
+      <Rect x={21} y={24} width={6} height={8} fill="#DC2626" />
+      {/* Candle 4 — green */}
+      <PdfLine x1={34} y1={11} x2={34} y2={32} stroke="#16A34A" strokeWidth={1} />
+      <Rect x={31} y={15} width={6} height={12} fill="#16A34A" />
+      {/* Candle 5 — green, highest */}
+      <PdfLine x1={44} y1={6} x2={44} y2={26} stroke="#16A34A" strokeWidth={1} />
+      <Rect x={41} y={10} width={6} height={12} fill="#16A34A" />
+    </Svg>
+  );
+}
+
+// Three-candle rising pattern inside a thin circle. Used in TopStrip + Footer
+// chrome so the mark appears on every page.
+function LogoSmall({ size = 16 }: { size?: number } = {}) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 16 16">
+      <Circle cx={8} cy={8} r={7.5} fill="none" stroke="#1a1a1a" strokeWidth={1} />
+      {/* Candle 1 — red */}
+      <PdfLine x1={5} y1={5} x2={5} y2={11} stroke="#DC2626" strokeWidth={0.8} />
+      <Rect x={4} y={6.5} width={2} height={3} fill="#DC2626" />
+      {/* Candle 2 — green */}
+      <PdfLine x1={8} y1={4} x2={8} y2={10} stroke="#16A34A" strokeWidth={0.8} />
+      <Rect x={7} y={5.5} width={2} height={3.5} fill="#16A34A" />
+      {/* Candle 3 — green, highest */}
+      <PdfLine x1={11} y1={3.5} x2={11} y2={8.5} stroke="#16A34A" strokeWidth={0.8} />
+      <Rect x={10} y={4.5} width={2} height={3.5} fill="#16A34A" />
+    </Svg>
+  );
+}
+
 // ---------------- Sub-components ----------------
 
 interface FooterProps {
@@ -450,9 +533,14 @@ interface FooterProps {
 function Footer({ date }: FooterProps) {
   return (
     <View style={styles.footer} fixed>
-      <Text style={styles.footerText}>
-        Built by Lorenzo Dodero · valuation.io · {date}
-      </Text>
+      <View style={styles.footerInner}>
+        <View style={styles.logoSlotSmall}>
+          <LogoSmall size={12} />
+        </View>
+        <Text style={styles.footerText}>
+          Built by Lorenzo Dodero · valuation.io · {date}
+        </Text>
+      </View>
     </View>
   );
 }
@@ -464,7 +552,12 @@ function TopStrip({ date }: TopStripProps) {
   return (
     <>
       <View style={styles.topStrip}>
-        <Text style={styles.topStripText}>VALUATION REPORT</Text>
+        <View style={styles.topStripLeft}>
+          <View style={styles.logoSlotSmall}>
+            <LogoSmall size={12} />
+          </View>
+          <Text style={styles.topStripText}>VALUATION REPORT</Text>
+        </View>
         <Text style={styles.topStripDate}>{date}</Text>
       </View>
       <View style={styles.hairline} />
@@ -568,6 +661,9 @@ function CoverPage({ valuation, today }: { valuation: FullValuation; today: stri
     <Page size="A4" style={styles.page}>
       <TopStrip date={today} />
 
+      <View style={styles.coverLogoRow}>
+        <LogoLarge size={56} />
+      </View>
       <Text style={styles.ticker}>{profile.symbol}</Text>
       {profile.name ? (
         <Text style={styles.companyName}>{profile.name}</Text>
@@ -751,6 +847,20 @@ function DCFPage({
       </View>
 
       {wb ? <WaccBlock wb={wb} /> : null}
+
+      {/* Informational sanity-check notes from the model (anomalous margin,
+          market divergence, ratio clamps, etc.). Understated — italic, muted
+          — to distinguish from the red sector_warning banner on the cover. */}
+      {dcf.warnings && dcf.warnings.length > 0 ? (
+        <View style={styles.modelNotes} wrap>
+          <Text style={styles.sectionTitle}>Model Notes</Text>
+          {dcf.warnings.map((w, i) => (
+            <Text key={i} style={styles.modelNoteItem}>
+              — {w}
+            </Text>
+          ))}
+        </View>
+      ) : null}
 
       <Footer date={today} />
     </Page>
