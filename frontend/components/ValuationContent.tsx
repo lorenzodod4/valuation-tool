@@ -31,26 +31,62 @@ export function ValuationContent({
       : "no peers available";
 
   const methods: FootballFieldMethod[] = [];
+
+  // DCF range lives inside assumptions_used (typed as Any-ish by the schema),
+  // so we narrow at the read site to pull per_share_low/per_share_high.
+  const dcfAssumptions = dcf.assumptions_used as {
+    per_share_low?: number | null;
+    per_share_high?: number | null;
+  };
   if (dcf.per_share_value != null) {
-    methods.push({ label: "DCF", value: dcf.per_share_value, color: "bull" });
+    methods.push({
+      label: "DCF",
+      base: dcf.per_share_value,
+      low: dcfAssumptions.per_share_low ?? null,
+      high: dcfAssumptions.per_share_high ?? null,
+      color: "bull",
+    });
   }
-  const pe = multiples.implied_valuations.pe_based;
+
+  // Comparables ranges sit next to implied_per_share on each method's object.
+  // The shared ImpliedValuation type doesn't enumerate the range fields yet,
+  // so cast at the read site to keep types/valuation.ts untouched.
+  type RangedImplied = {
+    implied_per_share: number | null;
+    implied_per_share_low?: number | null;
+    implied_per_share_high?: number | null;
+  };
+  const pe = multiples.implied_valuations.pe_based as RangedImplied | null;
   if (pe?.implied_per_share != null) {
-    methods.push({ label: "P/E", value: pe.implied_per_share, color: "accent" });
+    methods.push({
+      label: "P/E",
+      base: pe.implied_per_share,
+      low: pe.implied_per_share_low ?? null,
+      high: pe.implied_per_share_high ?? null,
+      color: "accent",
+    });
   }
-  const evEbitda = multiples.implied_valuations.ev_ebitda_based;
+  const evEbitda = multiples.implied_valuations.ev_ebitda_based as
+    | RangedImplied
+    | null;
   if (evEbitda?.implied_per_share != null) {
     methods.push({
       label: "EV/EBITDA",
-      value: evEbitda.implied_per_share,
-      color: "indigo-light",
+      base: evEbitda.implied_per_share,
+      low: evEbitda.implied_per_share_low ?? null,
+      high: evEbitda.implied_per_share_high ?? null,
+      color: "cyan",
     });
   }
-  const evSales = multiples.implied_valuations.ev_sales_based;
+  const evSales = multiples.implied_valuations.ev_sales_based as
+    | RangedImplied
+    | null;
   if (evSales?.implied_per_share != null) {
     methods.push({
       label: "EV/Sales",
-      value: evSales.implied_per_share,
+      base: evSales.implied_per_share,
+      low: evSales.implied_per_share_low ?? null,
+      high: evSales.implied_per_share_high ?? null,
       color: "bear",
     });
   }
