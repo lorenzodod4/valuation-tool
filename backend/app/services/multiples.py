@@ -1,10 +1,12 @@
 """Trading-multiples valuation: target's own ratios plus peer-based implied values."""
 
+import logging
 import statistics
 from typing import Any, ClassVar
 
 from app.services.data_fetcher import FinancialDataFetcher
 
+logger = logging.getLogger(__name__)
 
 TOTAL_DEBT_KEYS = ("total_debt",)
 CASH_KEYS = ("cash",)
@@ -177,8 +179,23 @@ class MultiplesValuator:
         3. Static PEER_MAP fallback for known tickers when FMP gives us nothing.
         4. Empty list — caller renders "insufficient data" downstream.
         """
+        peers, _source = self.resolve_peers(
+            ticker,
+            custom_peers=custom_peers,
+            target_market_cap=target_market_cap,
+        )
+        return peers
+
+    def resolve_peers(
+        self,
+        ticker: str,
+        custom_peers: list[str] | None = None,
+        target_market_cap: float | None = None,
+    ) -> tuple[list[str], str]:
+        """Return peer tickers and the source used to select them."""
         if custom_peers is not None:
-            return [p.upper() for p in custom_peers]
+            sym = ticker.upper()
+            return [p.upper() for p in custom_peers if p.upper() != sym], "custom"
 
         sym = ticker.upper()
         raw = self.fetcher.get_stock_peers(sym)
@@ -187,18 +204,21 @@ class MultiplesValuator:
 
         filtered = _filter_quality_peers(target_market_cap, raw)
         if filtered:
-            return filtered
+            return filtered, "fmp_stock_peers"
 
-        return list(self.PEER_MAP.get(sym, []))
+        return list(self.PEER_MAP.get(sym, [])), "static_fallback"
 
     def compute_peer_statistics(self, peer_tickers: list[str]) -> dict[str, Any]:
         """Compute multiples for each peer and aggregate median/mean/min/max."""
         peers: list[dict[str, Any]] = []
+        skipped_peers: list[dict[str, str]] = []
         for peer in peer_tickers:
             try:
                 peers.append(self.compute_multiples(peer))
             except Exception as exc:
-                print(f"[multiples] skipped peer {peer}: {exc}")
+                message = str(exc)
+                skipped_peers.append({"symbol": peer.upper(), "reason": message})
+                logger.info("Skipped peer %s during multiples calculation: %s", peer, message)
 
         stats: dict[str, dict[str, Any]] = {}
         for metric in RATIO_METRICS:
@@ -236,14 +256,14 @@ class MultiplesValuator:
                     "p75": None,
                     "count": 0,
                 }
-        return {"peers": peers, "statistics": stats}
+        return {"peers": peers, "statistics": stats, "skipped_peers": skipped_peers}
 
     def valuate_with_multiples(
         self, ticker: str, custom_peers: list[str] | None = None
     ) -> dict[str, Any]:
         """Run a full multiples valuation for a target against its peers."""
         target = self.compute_multiples(ticker)
-        peer_tickers = self.get_peers(
+        peer_tickers, peer_source = self.resolve_peers(
             ticker,
             custom_peers=custom_peers,
             target_market_cap=target.get("market_cap"),
@@ -317,12 +337,32 @@ class MultiplesValuator:
                 target.get("revenue"), stats["ev_sales"].get("p75"),
             )
 
+        warnings: list[str] = []
+        if len(peer_data["peers"]) < 3:
+            warnings.append(
+                "Fewer than three valid peers were available; peer medians may be noisy."
+            )
+        skipped = peer_data.get("skipped_peers") or []
+        if skipped:
+            warnings.append(
+                f"{len(skipped)} peer candidate(s) were skipped due to incomplete data."
+            )
+
+        # Period basis disclosure: multiples are TTM where available, but
+        # numerators (net income, EBITDA, revenue) come from the latest fiscal
+        # year. This is standard practice but worth surfacing so users can
+        # cross-check against annual reports.
+        period_basis = "TTM multiples on latest fiscal year numerators"
+
         return {
             "target_metrics": target,
             "peer_statistics": peer_data,
             "implied_valuations": implied_valuations,
             "current_price": target.get("price"),
             "peers_used": [p["symbol"] for p in peer_data["peers"]],
+            "peer_source": peer_source,
+            "period_basis": period_basis,
+            "warnings": warnings,
         }
 
     @staticmethod

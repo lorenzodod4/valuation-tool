@@ -2,8 +2,9 @@
 
 import { type FormEvent, useState } from "react";
 import { useRouter } from "next/navigation";
+import { ArrowRight, Search } from "lucide-react";
 
-const TICKER_PATTERN = /^[A-Z0-9]{1,5}$/;
+const TICKER_PATTERN = /^[A-Z0-9][A-Z0-9.-]{0,9}$/;
 
 export function SearchBar() {
   const router = useRouter();
@@ -14,7 +15,7 @@ export function SearchBar() {
     event.preventDefault();
     const ticker = value.trim().toUpperCase();
     if (!TICKER_PATTERN.test(ticker)) {
-      setError("Please enter a valid ticker (1-5 letters/numbers)");
+      setError("Use 1-10 characters: letters, numbers, dot, or hyphen.");
       return;
     }
     setError(null);
@@ -24,28 +25,31 @@ export function SearchBar() {
   return (
     <form onSubmit={handleSubmit} className="hero-search-form">
       <span className="hero-label" aria-hidden="true">
-        TICKER
+        <Search size={14} strokeWidth={1.8} />
       </span>
       <input
         type="text"
         value={value}
-        onChange={(event) => setValue(event.target.value.toUpperCase())}
+        onChange={(event) => {
+          setValue(event.target.value.toUpperCase());
+          if (error) setError(null);
+        }}
         placeholder="AAPL"
-        maxLength={5}
+        maxLength={10}
         autoCapitalize="characters"
         autoCorrect="off"
         spellCheck={false}
         aria-label="Ticker symbol"
+        aria-invalid={Boolean(error)}
+        aria-describedby={error ? "ticker-search-error" : undefined}
         className="hero-input"
       />
       <button type="submit" className="hero-btn">
         ANALYZE
-        <span className="hero-arrow" aria-hidden="true">
-          →
-        </span>
+        <ArrowRight className="hero-arrow" size={15} strokeWidth={1.8} aria-hidden="true" />
       </button>
       {error ? (
-        <p className="hero-error" role="alert">
+        <p id="ticker-search-error" className="hero-error" role="alert">
           {error}
         </p>
       ) : null}

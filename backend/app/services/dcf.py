@@ -1,8 +1,12 @@
 """Simplified 5-year DCF valuation built on FMP-normalized financials."""
 
+import logging
+import math
 from typing import Any
 
 from app.services.wacc import compute_wacc
+
+logger = logging.getLogger(__name__)
 
 
 REVENUE_KEY = "revenue"
@@ -54,7 +58,7 @@ class DCFValuator:
 
         raw_cagr = self._revenue_cagr(income, warnings)
         # Diagnostic: show the un-capped/un-floored CAGR so we can sanity-check the model input.
-        print(f"[dcf] raw historical 3y revenue CAGR: {raw_cagr:.4%}")
+        logger.info("raw historical 3y revenue CAGR: %.4f%%", raw_cagr * 100)
 
         # Floor at terminal+1% so the schedule always declines toward terminal instead of
         # sitting flat when the historical CAGR happens to be below terminal growth.
@@ -72,7 +76,7 @@ class DCFValuator:
             warnings=warnings, label="EBIT margin",
         )
         if ebit_field:
-            print(f"[dcf] EBIT margin source field: '{ebit_field}'")
+            logger.info("EBIT margin source field: '%s'", ebit_field)
         da_pct, _ = self._three_year_avg_ratio(
             cashflow, income, DA_KEYS, default=DEFAULT_DA_PCT,
             warnings=warnings, label="D&A % of revenue",
@@ -81,9 +85,12 @@ class DCFValuator:
             cashflow, income, CAPEX_KEYS, default=DEFAULT_CAPEX_PCT,
             warnings=warnings, label="CapEx % of revenue", absolute=True,
         )
+        # FMP reports changeInWorkingCapital as negative when WC increases
+        # (cash consumed). For FCFF we need the opposite sign: positive when
+        # cash is consumed, so we negate at the boundary.
         wc_change_pct, _ = self._three_year_avg_ratio(
             cashflow, income, WC_CHANGE_KEYS, default=DEFAULT_WC_CHANGE_PCT,
-            warnings=warnings, label="Change in WC % of revenue",
+            warnings=warnings, label="Change in WC % of revenue", negate=True,
         )
 
         # Sanity check: anomalous EBIT margin. Informational only — the
@@ -167,14 +174,17 @@ class DCFValuator:
         self, financials: dict[str, Any], assumptions: dict[str, Any]
     ) -> dict[str, Any]:
         """Project 5 years of FCFF, discount, and back into per-share value."""
-        wacc: float = assumptions["wacc"]
-        terminal_growth: float = assumptions["terminal_growth_rate"]
+        assumptions_used = dict(assumptions)
+        wacc: float = assumptions_used["wacc"]
+        terminal_growth: float = assumptions_used["terminal_growth_rate"]
         if wacc <= terminal_growth:
             raise ValueError(
                 f"WACC ({wacc:.2%}) must be greater than terminal growth ({terminal_growth:.2%})"
             )
+        if not math.isfinite(wacc) or not math.isfinite(terminal_growth):
+            raise ValueError("WACC and terminal growth must be finite numbers")
 
-        warnings: list[str] = list(assumptions.get("warnings", []))
+        warnings: list[str] = list(assumptions_used.get("warnings", []))
 
         income: list[dict[str, Any]] = financials.get("income_statement") or []
         balance: list[dict[str, Any]] = financials.get("balance_sheet") or []
@@ -186,12 +196,17 @@ class DCFValuator:
         if latest_revenue is None or latest_revenue <= 0:
             raise ValueError("Latest revenue is missing or non-positive")
 
-        growth_rates: list[float] = assumptions["revenue_growth_rates"]
-        ebit_margin: float = assumptions["ebit_margin"]
-        tax_rate: float = assumptions["tax_rate"]
-        da_pct: float = assumptions["da_pct_revenue"]
-        capex_pct: float = assumptions["capex_pct_revenue"]
-        wc_pct: float = assumptions["wc_change_pct_revenue"]
+        growth_rates: list[float] = assumptions_used["revenue_growth_rates"]
+        if len(growth_rates) < 5:
+            raise ValueError("DCF requires five revenue growth rates")
+        if any((not math.isfinite(rate)) or rate <= -0.95 for rate in growth_rates[:5]):
+            raise ValueError("Revenue growth assumptions are outside supported bounds")
+
+        ebit_margin: float = assumptions_used["ebit_margin"]
+        tax_rate: float = assumptions_used["tax_rate"]
+        da_pct: float = assumptions_used["da_pct_revenue"]
+        capex_pct: float = assumptions_used["capex_pct_revenue"]
+        wc_pct: float = assumptions_used["wc_change_pct_revenue"]
 
         projections: list[dict[str, Any]] = []
         revenue = float(latest_revenue)
@@ -271,11 +286,11 @@ class DCFValuator:
                 if v is not None:
                     corner_values.append(v)
         if len(corner_values) >= 2:
-            assumptions["per_share_low"] = min(corner_values)
-            assumptions["per_share_high"] = max(corner_values)
+            assumptions_used["per_share_low"] = min(corner_values)
+            assumptions_used["per_share_high"] = max(corner_values)
         else:
-            assumptions["per_share_low"] = None
-            assumptions["per_share_high"] = None
+            assumptions_used["per_share_low"] = None
+            assumptions_used["per_share_high"] = None
 
         sector = (profile.get("sector") or "").strip()
         sector_warning: dict[str, str] | None = None
@@ -296,10 +311,124 @@ class DCFValuator:
             "per_share_value": per_share_value,
             "current_price": current_price,
             "upside_pct": upside_pct,
-            "assumptions_used": assumptions,
-            "wacc_breakdown": assumptions.get("wacc_breakdown"),
+            "assumptions_used": assumptions_used,
+            "wacc_breakdown": assumptions_used.get("wacc_breakdown"),
             "warnings": warnings,
             "sector_warning": sector_warning,
+        }
+
+    def reverse_dcf(
+        self,
+        financials: dict[str, Any],
+        assumptions: dict[str, Any],
+        target_price: float | None = None,
+    ) -> dict[str, Any]:
+        """Solve for the revenue growth rate that justifies a given price.
+
+        Uses binary search on a uniform Y1-Y5 growth rate to find the growth
+        that makes the DCF fair value equal the current (or specified) price.
+        Returns the implied growth rate, margin of safety, and interpretation.
+        """
+        profile: dict[str, Any] = financials.get("profile") or {}
+        price = target_price or profile.get("price")
+        if price is None or price <= 0:
+            raise ValueError("No market price available for reverse DCF")
+
+        lo, hi = -0.10, 0.50
+        fair_lo = self._fair_value_for_uniform_growth(financials, assumptions, lo)
+        fair_hi = self._fair_value_for_uniform_growth(financials, assumptions, hi)
+
+        solver_status = "solved"
+        implied_growth: float | None = None
+
+        if fair_lo is not None and fair_hi is not None and fair_lo <= fair_hi:
+            if price <= fair_lo:
+                implied_growth = lo
+                solver_status = "below_range"
+            elif price >= fair_hi:
+                implied_growth = hi
+                solver_status = "above_range"
+            else:
+                low_bound = lo
+                high_bound = hi
+                for _ in range(80):
+                    mid = (low_bound + high_bound) / 2.0
+                    fair = self._fair_value_for_uniform_growth(
+                        financials,
+                        assumptions,
+                        mid,
+                    )
+                    if fair is None:
+                        high_bound = mid
+                        continue
+                    if fair < price:
+                        low_bound = mid
+                    else:
+                        high_bound = mid
+                    if abs(fair - price) / price < 0.001:
+                        implied_growth = mid
+                        break
+                if implied_growth is None:
+                    implied_growth = (low_bound + high_bound) / 2.0
+        else:
+            # If negative or unstable FCFF makes the growth/value relationship
+            # non-monotonic, keep the response explicit instead of pretending
+            # the reverse DCF can be solved cleanly.
+            implied_growth = assumptions["revenue_growth_rates"][0]
+            solver_status = "unstable"
+
+        # Also compute with base assumptions for comparison
+        base_result = self.run_dcf(financials, assumptions)
+        base_fair = base_result.get("per_share_value")
+
+        # Margin of safety
+        if base_fair is not None and price > 0:
+            margin_of_safety = (base_fair - price) / price
+        else:
+            margin_of_safety = None
+
+        # Interpretation
+        if margin_of_safety is not None:
+            if solver_status == "above_range":
+                interpretation = (
+                    "Market price requires revenue growth above the solver range. "
+                    "Treat the implied rate as a lower-bound stress case."
+                )
+            elif solver_status == "below_range":
+                interpretation = (
+                    "Market price is justified even at the solver's low-growth bound. "
+                    "The reverse DCF is not growth-constrained at this price."
+                )
+            elif solver_status == "unstable":
+                interpretation = (
+                    "Reverse DCF is unstable because the projected cash-flow profile "
+                    "does not produce a clean growth-to-value relationship."
+                )
+            elif margin_of_safety > 0.20:
+                interpretation = "Significant upside — market may be under-pricing growth"
+            elif margin_of_safety > 0:
+                interpretation = "Modest upside — fairly valued with some room"
+            elif margin_of_safety > -0.20:
+                interpretation = "Near fair value — small premium to intrinsic"
+            else:
+                interpretation = "Trading above DCF value — market prices higher growth"
+        else:
+            interpretation = "Insufficient data for interpretation"
+
+        return {
+            "implied_growth_rate": implied_growth,
+            "target_price": price,
+            "base_assumptions_growth": assumptions["revenue_growth_rates"][0] if assumptions.get("revenue_growth_rates") else None,
+            "base_fair_value": base_fair,
+            "margin_of_safety": margin_of_safety,
+            "interpretation": interpretation,
+            "wacc": assumptions.get("wacc"),
+            "terminal_growth_rate": assumptions.get("terminal_growth_rate"),
+            "solver_status": solver_status,
+            "growth_floor": lo,
+            "growth_ceiling": hi,
+            "fair_value_at_growth_floor": fair_lo,
+            "fair_value_at_growth_ceiling": fair_hi,
         }
 
     def sensitivity_table(
@@ -393,6 +522,23 @@ class DCFValuator:
             return None
         return equity_value / float(shares)
 
+    def _fair_value_for_uniform_growth(
+        self,
+        financials: dict[str, Any],
+        assumptions: dict[str, Any],
+        growth_rate: float,
+    ) -> float | None:
+        test_assumptions = dict(assumptions)
+        test_assumptions["revenue_growth_rates"] = [growth_rate] * 5
+        try:
+            result = self.run_dcf(financials, test_assumptions)
+        except (ValueError, ZeroDivisionError):
+            return None
+        fair = result.get("per_share_value")
+        if fair is None or not math.isfinite(fair):
+            return None
+        return fair
+
     @staticmethod
     def _clamp_with_warning(
         value: float,
@@ -469,6 +615,7 @@ class DCFValuator:
         warnings: list[str],
         label: str,
         absolute: bool = False,
+        negate: bool = False,
     ) -> tuple[float, str | None]:
         try:
             revenue_by_date: dict[str, float] = {}
@@ -492,6 +639,8 @@ class DCFValuator:
                     field_used = key
                 if absolute:
                     value = abs(value)
+                if negate:
+                    value = -value
                 ratios.append(value / rev)
 
             if not ratios:

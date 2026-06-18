@@ -4,6 +4,8 @@ import dynamic from "next/dynamic";
 import type {
   FullValuation,
   HistoricalFinancials,
+  MultiplesResult,
+  ReverseDCFResult,
   SensitivityTable,
 } from "@/types/valuation";
 
@@ -28,7 +30,9 @@ const PDFLinkInner = dynamic(
 interface ExportPDFButtonProps {
   valuation: FullValuation;
   historical?: HistoricalFinancials | null;
+  reverseDcf?: ReverseDCFResult | null;
   sensitivity?: SensitivityTable | null;
+  multiples?: MultiplesResult | null;
 }
 
 export function ExportPDFButton(props: ExportPDFButtonProps) {

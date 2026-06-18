@@ -87,9 +87,9 @@ export function Header() {
           About
         </Link>
         <ThemeToggle />
-        <span className="live-pill">
+        <span className="live-pill" aria-label="Delayed market reference signal">
           <span className="live-dot" aria-hidden="true" />
-          LIVE
+          DELAYED REF
         </span>
       </div>
     </header>

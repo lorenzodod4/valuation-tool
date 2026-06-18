@@ -1,7 +1,6 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
 import type { CompanyProfile } from "@/types/valuation";
 import { abbreviateNumber, formatCurrency } from "@/lib/format";
 
@@ -13,19 +12,6 @@ export function ValuationTickerHeader({ profile }: ValuationTickerHeaderProps) {
   const meta = [profile.sector, profile.industry, profile.country].filter(
     (item): item is string => Boolean(item),
   );
-
-  // Compute the refresh timestamp on the client after mount so the rendered
-  // string matches between SSR and hydration (Date.now() in render would
-  // produce mismatched strings).
-  const [refreshedAt, setRefreshedAt] = useState<string | null>(null);
-  useEffect(() => {
-    setRefreshedAt(
-      new Date().toLocaleTimeString([], {
-        hour: "2-digit",
-        minute: "2-digit",
-      }),
-    );
-  }, [profile.symbol]);
 
   return (
     <>
@@ -72,11 +58,9 @@ export function ValuationTickerHeader({ profile }: ValuationTickerHeaderProps) {
             <div className="market-cap-value">
               {abbreviateNumber(profile.market_cap)}
             </div>
-            {refreshedAt ? (
-              <p className="data-refresh-note">
-                Data refreshed {refreshedAt} · 15-min delay
-              </p>
-            ) : null}
+            <p className="data-refresh-note">
+              Provider data may be delayed
+            </p>
           </div>
         </div>
       </div>

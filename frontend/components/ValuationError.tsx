@@ -44,7 +44,7 @@ export function ValuationError({
     : `Could not load ${ticker.toUpperCase()}`;
 
   const displayMessage = isPremium
-    ? "Free tier FMP doesn't cover this ticker. Try a US-listed equity (NYSE or NASDAQ)."
+    ? "Free tier FMP does not cover this ticker. Try a US-listed equity on NYSE or NASDAQ."
     : message;
 
   // Show chips when the caller passed some, OR when it's a premium error

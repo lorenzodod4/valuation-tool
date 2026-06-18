@@ -13,6 +13,8 @@ import {
 import type {
   FullValuation,
   HistoricalFinancials,
+  MultiplesResult,
+  ReverseDCFResult,
   SensitivityTable,
   WACCBreakdown,
 } from "@/types/valuation";
@@ -140,6 +142,7 @@ const styles = StyleSheet.create({
   metricCard4: {
     width: "25%",
     paddingHorizontal: 4,
+    marginBottom: 10,
   },
 
   // ============ Section headings ============
@@ -433,6 +436,37 @@ const styles = StyleSheet.create({
     lineHeight: 1.4,
     marginBottom: 3,
   },
+  scopeNote: {
+    borderWidth: 0.5,
+    borderColor: COLORS.border,
+    borderRadius: 4,
+    padding: 10,
+    marginBottom: 14,
+    backgroundColor: "#FAFAFA",
+  },
+  scopeNoteTitle: {
+    fontSize: 8,
+    fontFamily: "Helvetica-Bold",
+    color: COLORS.textMuted,
+    letterSpacing: 0.5,
+    marginBottom: 4,
+  },
+  scopeNoteText: {
+    fontSize: 8.5,
+    lineHeight: 1.4,
+    color: COLORS.textSecondary,
+  },
+  disclaimer: {
+    borderTopWidth: 0.5,
+    borderTopColor: COLORS.border,
+    paddingTop: 8,
+    marginTop: 10,
+  },
+  disclaimerText: {
+    fontSize: 8,
+    lineHeight: 1.35,
+    color: COLORS.textMuted,
+  },
 
   // Small badge for target row in peer table.
   targetBadge: {
@@ -440,6 +474,26 @@ const styles = StyleSheet.create({
     fontFamily: "Helvetica-Bold",
     color: COLORS.targetText,
     letterSpacing: 0.5,
+  },
+  reverseInterpretation: {
+    borderWidth: 0.5,
+    borderColor: COLORS.border,
+    borderRadius: 4,
+    padding: 12,
+    marginTop: 4,
+    marginBottom: 18,
+    backgroundColor: "#FAFAFA",
+  },
+  reverseInterpretationLabel: {
+    fontSize: 8,
+    color: COLORS.textFaint,
+    letterSpacing: 0.6,
+    marginBottom: 5,
+  },
+  reverseInterpretationText: {
+    fontSize: 10,
+    lineHeight: 1.45,
+    color: COLORS.textSecondary,
   },
 });
 
@@ -686,11 +740,64 @@ function FootballFieldBar({
 interface ValuationPDFProps {
   valuation: FullValuation;
   historical?: HistoricalFinancials | null;
+  reverseDcf?: ReverseDCFResult | null;
   sensitivity?: SensitivityTable | null;
+  multiples?: MultiplesResult | null;
 }
 
-function CoverPage({ valuation, today }: { valuation: FullValuation; today: string }) {
-  const { profile, dcf, multiples } = valuation;
+function ReportScopeNote({
+  historical,
+  sensitivity,
+}: {
+  historical?: HistoricalFinancials | null;
+  sensitivity?: SensitivityTable | null;
+}) {
+  const historicalStatus = historical?.historical.length
+    ? "available in the web report"
+    : "not available for this ticker";
+  const sensitivityStatus = sensitivity
+    ? "available in the web report"
+    : "not available for this ticker";
+
+  return (
+    <View style={styles.scopeNote}>
+      <Text style={styles.scopeNoteTitle}>SCOPE</Text>
+      <Text style={styles.scopeNoteText}>
+        Core PDF: valuation summary, valuation model, Reverse DCF, and trading
+        comparables. Historical financials are {historicalStatus}; sensitivity
+        analysis is {sensitivityStatus}.
+      </Text>
+    </View>
+  );
+}
+
+function DisclaimerBlock() {
+  return (
+    <View style={styles.disclaimer}>
+      <Text style={styles.disclaimerText}>
+        Important disclosures: educational and informational use only. This is
+        not investment advice, a recommendation, or a solicitation to buy or sell any security.
+        Auto-derived assumptions are starting points and should be reviewed
+        against source data and professional judgment.
+      </Text>
+    </View>
+  );
+}
+
+function CoverPage({
+  valuation,
+  today,
+  historical,
+  sensitivity,
+}: {
+  valuation: FullValuation;
+  today: string;
+  historical?: HistoricalFinancials | null;
+  sensitivity?: SensitivityTable | null;
+}) {
+  const { profile, dcf, ddm, multiples } = valuation;
+  const isDDM = !!ddm;
+  const valuationModel = isDDM ? ddm : dcf;
 
   // Range data lives inside dicts the shared types don't enumerate (the
   // backend serializes them as opaque dict[str, Any]). Cast at the read site
@@ -700,7 +807,7 @@ function CoverPage({ valuation, today }: { valuation: FullValuation; today: stri
     implied_per_share_low?: number | null;
     implied_per_share_high?: number | null;
   };
-  const dcfAssumptions = dcf.assumptions_used as {
+  const modelAssumptions = valuationModel?.assumptions_used as {
     per_share_low?: number | null;
     per_share_high?: number | null;
   };
@@ -719,12 +826,12 @@ function CoverPage({ valuation, today }: { valuation: FullValuation; today: stri
   // doesn't collide with the current-price reference line (which uses
   // COLORS.text, not bear, in the PDF).
   const methods: FFMethod[] = [];
-  if (dcf.per_share_value != null) {
+  if (valuationModel?.per_share_value != null) {
     methods.push({
-      label: "DCF",
-      base: dcf.per_share_value,
-      low: dcfAssumptions.per_share_low ?? null,
-      high: dcfAssumptions.per_share_high ?? null,
+      label: isDDM ? "DDM" : "DCF",
+      base: valuationModel.per_share_value,
+      low: modelAssumptions.per_share_low ?? null,
+      high: modelAssumptions.per_share_high ?? null,
       color: COLORS.bull,
     });
   }
@@ -763,7 +870,7 @@ function CoverPage({ valuation, today }: { valuation: FullValuation; today: stri
     });
   }
 
-  const currentPrice = dcf.current_price ?? profile.price ?? null;
+  const currentPrice = valuationModel?.current_price ?? profile.price ?? null;
   // Max value is the upper bound of the bar track; include every method's
   // high (so range bars don't get clipped on the right) plus the bases and
   // the current-price reference. Pad 10% above the largest so the longest
@@ -849,12 +956,14 @@ function CoverPage({ valuation, today }: { valuation: FullValuation; today: stri
         )}
       </View>
 
-      {dcf.sector_warning ? (
+      {dcf?.sector_warning ? (
         <View style={styles.warning}>
           <Text style={styles.warningText}>{dcf.sector_warning.message}</Text>
         </View>
       ) : null}
 
+      <ReportScopeNote historical={historical} sensitivity={sensitivity} />
+      <DisclaimerBlock />
       <Footer date={today} />
     </Page>
   );
@@ -868,6 +977,23 @@ function DCFPage({
   today: string;
 }) {
   const { dcf } = valuation;
+  if (!dcf) {
+    return (
+      <Page size="A4" style={styles.page}>
+        <TopStrip date={today} />
+        <Text style={styles.bigSectionTitle}>Discounted Cash Flow</Text>
+        <View style={styles.reverseInterpretation}>
+          <Text style={styles.reverseInterpretationLabel}>NOT APPLICABLE</Text>
+          <Text style={styles.reverseInterpretationText}>
+            DCF output was not returned for this ticker. The web report may use
+            an alternate valuation model when DCF is not the appropriate primary
+            method.
+          </Text>
+        </View>
+        <Footer date={today} />
+      </Page>
+    );
+  }
   const assumptions = dcf.assumptions_used as {
     wacc?: number;
     terminal_growth_rate?: number;
@@ -995,12 +1121,124 @@ function DCFPage({
   );
 }
 
+function ReverseDCFPage({
+  valuation,
+  reverseDcf,
+  today,
+}: {
+  valuation: FullValuation;
+  reverseDcf?: ReverseDCFResult | null;
+  today: string;
+}) {
+  const { profile, dcf } = valuation;
+  if (!dcf) {
+    return (
+      <Page size="A4" style={styles.page}>
+        <TopStrip date={today} />
+        <Text style={styles.bigSectionTitle}>Reverse DCF</Text>
+        <View style={styles.reverseInterpretation}>
+          <Text style={styles.reverseInterpretationLabel}>NOT APPLICABLE</Text>
+          <Text style={styles.reverseInterpretationText}>
+            Reverse DCF requires a DCF base model and was not available for this
+            ticker when the report was generated.
+          </Text>
+        </View>
+        <Footer date={today} />
+      </Page>
+    );
+  }
+  const assumptions = dcf.assumptions_used as {
+    wacc?: number;
+    terminal_growth_rate?: number;
+    revenue_growth_rates?: number[];
+  };
+  const currentPrice = dcf.current_price ?? profile.price ?? null;
+
+  return (
+    <Page size="A4" style={styles.page}>
+      <TopStrip date={today} />
+
+      <Text style={styles.bigSectionTitle}>Reverse DCF</Text>
+      <Text style={styles.sectionSubtitle}>
+        Market-implied revenue growth required to justify the current price.
+      </Text>
+
+      {reverseDcf ? (
+        <>
+          <View style={styles.metricRow4}>
+            <MetricCard4
+              label="IMPLIED GROWTH"
+              value={fmtPct(reverseDcf.implied_growth_rate)}
+            />
+            <MetricCard4
+              label="TARGET / MARKET PRICE"
+              value={fmtMoney(reverseDcf.target_price ?? currentPrice)}
+            />
+            <MetricCard4
+              label="BASE ASSUMPTION GROWTH"
+              value={fmtPct(reverseDcf.base_assumptions_growth)}
+            />
+            <MetricCard4
+              label="BASE FAIR VALUE"
+              value={fmtMoney(reverseDcf.base_fair_value)}
+            />
+            <MetricCard4
+              label="MARGIN OF SAFETY"
+              value={fmtPctSigned(reverseDcf.margin_of_safety)}
+            />
+            <MetricCard4
+              label="WACC"
+              value={fmtPct(reverseDcf.wacc ?? assumptions.wacc)}
+            />
+            <MetricCard4
+              label="TERMINAL GROWTH"
+              value={fmtPct(
+                reverseDcf.terminal_growth_rate ??
+                  assumptions.terminal_growth_rate,
+              )}
+            />
+            <MetricCard4
+              label="BASE Y1 GROWTH"
+              value={fmtPct(assumptions.revenue_growth_rates?.[0])}
+            />
+          </View>
+
+          <View style={styles.reverseInterpretation}>
+            <Text style={styles.reverseInterpretationLabel}>INTERPRETATION</Text>
+            <Text style={styles.reverseInterpretationText}>
+              {reverseDcf.interpretation}
+            </Text>
+          </View>
+
+          <Text style={styles.body}>
+            Reverse DCF holds the operating model structure constant and solves
+            for the uniform forecast-period revenue growth rate that equates
+            DCF fair value to the market price. It is a reasonableness check,
+            not a standalone valuation conclusion.
+          </Text>
+        </>
+      ) : (
+        <View style={styles.reverseInterpretation}>
+          <Text style={styles.reverseInterpretationLabel}>UNAVAILABLE</Text>
+          <Text style={styles.reverseInterpretationText}>
+            Reverse DCF data was not available when the report was generated.
+            The frontend report still shows this section when the endpoint
+            returns a valid result.
+          </Text>
+        </View>
+      )}
+
+      <Footer date={today} />
+    </Page>
+  );
+}
+
 function WaccBlock({ wb }: { wb: WACCBreakdown }) {
   return (
     <View>
       <View style={styles.waccHeader}>
         <Text style={styles.sectionTitle}>WACC Breakdown</Text>
-        <Text style={styles.waccSource}>Source: Damodaran, Jan 2026</Text>
+        <Text style={styles.waccSource}>Model reference inputs · {wb.data_as_of}</Text>
       </View>
       {[
         ["Risk-free rate", fmtPct(wb.risk_free_rate)],
@@ -1029,15 +1267,18 @@ function WaccBlock({ wb }: { wb: WACCBreakdown }) {
 function PeersPage({
   valuation,
   today,
+  multiples,
 }: {
   valuation: FullValuation;
   today: string;
+  multiples?: MultiplesResult | null;
 }) {
-  const { profile, multiples } = valuation;
-  const target = multiples.target_metrics;
-  const peers = multiples.peer_statistics.peers ?? [];
-  const stats = multiples.peer_statistics.statistics;
-  const currentPrice = multiples.current_price;
+  const { profile } = valuation;
+  const activeMultiples = multiples ?? valuation.multiples;
+  const target = activeMultiples.target_metrics;
+  const peers = activeMultiples.peer_statistics.peers ?? [];
+  const stats = activeMultiples.peer_statistics.statistics;
+  const currentPrice = activeMultiples.current_price;
 
   function deltaPct(implied: number | null | undefined): number | null {
     if (implied == null || currentPrice == null || currentPrice <= 0) return null;
@@ -1049,9 +1290,9 @@ function PeersPage({
     return delta >= 0 ? COLORS.bull : COLORS.bear;
   }
 
-  const peBased = multiples.implied_valuations.pe_based;
-  const evEbBased = multiples.implied_valuations.ev_ebitda_based;
-  const evSlBased = multiples.implied_valuations.ev_sales_based;
+  const peBased = activeMultiples.implied_valuations.pe_based;
+  const evEbBased = activeMultiples.implied_valuations.ev_ebitda_based;
+  const evSlBased = activeMultiples.implied_valuations.ev_sales_based;
 
   // Column widths sum to 100%.
   const cols = {
@@ -1219,16 +1460,32 @@ function PeersPage({
 
 // ---------------- Root Document ----------------
 
-export function ValuationPDF({ valuation }: ValuationPDFProps) {
+export function ValuationPDF({
+  valuation,
+  historical,
+  reverseDcf,
+  sensitivity,
+  multiples,
+}: ValuationPDFProps) {
   const today = fmtDate(new Date());
   return (
     <Document
       title={`${valuation.profile.symbol} Valuation Report`}
       author="valuation.io"
     >
-      <CoverPage valuation={valuation} today={today} />
+      <CoverPage
+        valuation={valuation}
+        historical={historical}
+        sensitivity={sensitivity}
+        today={today}
+      />
       <DCFPage valuation={valuation} today={today} />
-      <PeersPage valuation={valuation} today={today} />
+      <ReverseDCFPage
+        valuation={valuation}
+        reverseDcf={reverseDcf}
+        today={today}
+      />
+      <PeersPage valuation={valuation} multiples={multiples} today={today} />
     </Document>
   );
 }

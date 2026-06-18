@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { BorderGlow } from "@/components/BorderGlow";
 
 interface Feature {
   num: string;
@@ -27,7 +28,7 @@ const FEATURES: Feature[] = [
     ),
     title: "Discounted cash flow",
     description:
-      "5-year forecast with terminal value, WACC sensitivity, and growth scenarios.",
+      "5-year FCFF forecast with terminal value, WACC sensitivity, and valuation ranges.",
   },
   {
     num: "02",
@@ -41,7 +42,7 @@ const FEATURES: Feature[] = [
     ),
     title: "Trading comparables",
     description:
-      "P/E, EV/EBITDA, EV/Sales benchmarked against custom peer groups.",
+      "P/E, EV/EBITDA, EV/Sales benchmarked against dynamic peer groups.",
   },
   {
     num: "03",
@@ -83,11 +84,16 @@ const FEATURES: Feature[] = [
   },
 ];
 
-export function FeatureCards() {
+interface FeatureCardsProps {
+  useBorderGlow?: boolean;
+}
+
+export function FeatureCards({ useBorderGlow = false }: FeatureCardsProps) {
   return (
     <div className="feature-cards-grid">
-      {FEATURES.map((feature) => (
-        <div key={feature.num} className="feature-card">
+      {FEATURES.map((feature) => {
+        const card = (
+          <div className="feature-card">
           <div className="feature-card-top">
             <span
               className={`icon-box ${feature.iconClass}`}
@@ -99,8 +105,23 @@ export function FeatureCards() {
           </div>
           <h3 className="card-title">{feature.title}</h3>
           <p className="card-desc">{feature.description}</p>
-        </div>
-      ))}
+          </div>
+        );
+
+        return useBorderGlow ? (
+          <BorderGlow
+            key={feature.num}
+            className="home-glow-card feature-glow"
+            borderRadius={14}
+            glowRadius={22}
+            fillOpacity={0.12}
+          >
+            {card}
+          </BorderGlow>
+        ) : (
+          <div key={feature.num}>{card}</div>
+        );
+      })}
     </div>
   );
 }

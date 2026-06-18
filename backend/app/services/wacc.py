@@ -19,11 +19,15 @@ def compute_cost_of_debt_pretax(
     interest_expense: float | None,
     total_debt: float | None,
 ) -> float:
-    """Pre-tax Rd = |Interest Expense| / Total Debt, clamped to a sane range."""
+    """Pre-tax Rd = |Interest Expense| / Total Debt, clamped to a sane range.
+    
+    Uses absolute value so negative interest expense (cash/interest income)
+    is treated as a positive cost magnitude rather than falling back to default.
+    """
     default = float(WACC_INPUTS["default_cost_of_debt_pretax"])
     if not total_debt or total_debt <= 0:
         return default
-    if interest_expense is None or interest_expense <= 0:
+    if interest_expense is None:
         return default
     rd = abs(interest_expense) / total_debt
     # Clamp to a realistic corporate range (1%–15%) — protects against bad data.

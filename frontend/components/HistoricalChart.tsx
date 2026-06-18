@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, type ReactNode } from "react";
+import type { ReactNode } from "react";
 import {
   Area,
   AreaChart,
@@ -11,43 +11,16 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import { useTheme } from "@/contexts/ThemeContext";
 import { abbreviateNumber, formatCurrency } from "@/lib/format";
+import { useThemeColors } from "@/lib/useThemeColors";
 import type { HistoricalFinancials } from "@/types/valuation";
 
 interface HistoricalChartProps {
   data: HistoricalFinancials["historical"];
 }
 
-interface ResolvedColors {
-  accent: string;
-  bull: string;
-  textSecondary: string;
-  textTertiary: string;
-  borderDefault: string;
-}
-
-function readVar(name: string, fallback: string): string {
-  if (typeof window === "undefined") return fallback;
-  const value = getComputedStyle(document.documentElement)
-    .getPropertyValue(name)
-    .trim();
-  return value || fallback;
-}
-
 export function HistoricalChart({ data }: HistoricalChartProps) {
-  const { theme } = useTheme();
-  const [colors, setColors] = useState<ResolvedColors | null>(null);
-
-  useEffect(() => {
-    setColors({
-      accent: readVar("--accent", "#6366F1"),
-      bull: readVar("--bull", "#16A34A"),
-      textSecondary: readVar("--text-secondary", "#475569"),
-      textTertiary: readVar("--text-tertiary", "#64748B"),
-      borderDefault: readVar("--border-default", "#E5E7EB"),
-    });
-  }, [theme]);
+  const colors = useThemeColors();
 
   if (!data || data.length === 0) {
     return (
@@ -55,10 +28,6 @@ export function HistoricalChart({ data }: HistoricalChartProps) {
         Historical data unavailable for this ticker.
       </div>
     );
-  }
-
-  if (!colors) {
-    return <div className="historical-chart-container" />;
   }
 
   const limitedHistory = data.length < 3;

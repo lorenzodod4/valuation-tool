@@ -11,18 +11,20 @@
 Enter any US-listed ticker. The tool fetches financial data from Financial Modeling Prep and runs a complete valuation workflow:
 
 - **Discounted Cash Flow (DCF)** — 5-year FCFF projection with auto-derived assumptions, real WACC computed per ticker using Damodaran-sourced Rf and ERP, terminal value via Gordon Growth.
+- **Dividend Discount Model (DDM)** — For financial institutions and REITs, the tool automatically uses DDM instead of DCF. Projects 5 years of dividends with Gordon Growth terminal value and CAPM cost of equity.
+- **Reverse DCF** — Solves for the implied revenue growth rate that justifies the current market price.
 - **Trading Comparables** — peer group sourced dynamically and size-filtered; P/E, EV/EBITDA, EV/Sales, P/Book multiples.
 - **Football Field** — unified view of valuation methods vs current market price.
 - **Historical Financials** — 5-year trend of revenue, EBITDA, and net income.
 - **DCF Sensitivity** — 5×5 grid of per-share value across WACC and terminal growth assumptions, color-coded against current price.
-- **Sector Awareness** — DCF warning for financials and REITs (where DCF is not the standard methodology).
-- **PDF Export** — download a 3-page pitch book report with all key valuation outputs.
+- **Sector Awareness** — Automatically selects DDM for Financial Services and Real Estate sectors; DCF for all other sectors.
+- **PDF Export** — download a pitch book report with all key valuation outputs.
 
 ## Tech stack
 
 **Frontend** — Next.js 16, TypeScript, Tailwind CSS v4, Recharts, @react-pdf/renderer. Deployed on Vercel.
 
-**Backend** — FastAPI, Python 3.13, httpx, SQLite for persistent caching. Deployed on Render.
+**Backend** — FastAPI, Python 3.12, httpx, SQLite for persistent caching. Deployed on Render.
 
 **Data** — Financial Modeling Prep API with 3-key rotation for resilience.
 
@@ -44,10 +46,10 @@ All inputs cited and shown transparently in the UI.
 ## Coverage
 
 - ✓ US-listed equities (NYSE, NASDAQ)
+- ✓ Automatic DDM for Financial Services and Real Estate sectors
+- ✓ Reverse DCF for growth-rate analysis
 - ✗ Non-US listings (premium tier required)
 - ✗ Real-time prices (15-minute delay)
-
-For banks, REITs, insurance, and asset managers, the DCF output includes a warning: DDM (Dividend Discount Model) is the standard methodology for these sectors. The tool currently provides DCF as a reference only for these tickers; refer to Trading Comparables for primary analysis.
 
 ## Architecture
 
@@ -56,22 +58,21 @@ For banks, REITs, insurance, and asset managers, the DCF output includes a warni
 │   Browser    │────▶│  Next.js     │────▶│  FastAPI     │
 │              │     │  (Vercel)    │     │  (Render)    │
 └──────────────┘     └──────────────┘     └──────┬───────┘
-                                                  │
-                                                  ▼
-                                          ┌──────────────┐
-                                          │  FMP API     │
-                                          │  + SQLite    │
-                                          │  cache       │
-                                          └──────────────┘
+                                                   │
+                                                   ▼
+                                           ┌──────────────┐
+                                           │  FMP API     │
+                                           │  + SQLite    │
+                                           │  cache       │
+                                           └──────────────┘
 ```
 
 ## Local development
 
 Backend:
-
 ```bash
 cd backend
-python3.13 -m venv venv
+python3.12 -m venv venv
 source venv/bin/activate
 pip install -r requirements.txt
 cp .env.example .env
@@ -80,7 +81,6 @@ uvicorn app.main:app --reload --port 8000
 ```
 
 Frontend:
-
 ```bash
 cd frontend
 npm install
@@ -88,20 +88,33 @@ echo "NEXT_PUBLIC_API_URL=http://localhost:8000" > .env.local
 npm run dev
 ```
 
+Verification:
+```bash
+cd frontend
+npm run lint          # ESLint
+npm run typecheck     # tsc --noEmit
+npm run build         # Full production build
+cd ../backend
+python -m compileall app    # Python syntax check
+```
+
 ## Limitations & honest notes
 
-- Auto-derived DCF assumptions are starting points, not conclusions. Real analysis requires user judgment on growth, margins, and discount rates.
+- Auto-derived assumptions are starting points, not conclusions. Real analysis requires user judgment on growth, margins, and discount rates.
 - Free tier FMP coverage is limited to most US large/mid caps. Some smaller or recent tickers may have incomplete data.
-- DCF is not the standard methodology for banks, REITs, and insurance companies. A warning is displayed for these sectors; DDM implementation is planned.
+- DCF is not the standard methodology for banks, REITs, and insurance companies. A warning is displayed for these sectors, and DDM is automatically used as the primary model.
 - This is an educational project. Outputs are not investment advice.
 
 ## Roadmap
 
-- DDM (Dividend Discount Model) for financial institutions
-- Multi-scenario DCF with user-adjustable sliders
-- Watchlist with localStorage persistence
-- European equity coverage (alternative data provider)
-- Real-time price integration
+- ✅ DDM (Dividend Discount Model) for financial institutions
+- ✅ Reverse DCF — implied growth rate solver
+- 🟡 Multi-scenario DCF — component built, not yet integrated into report
+- 🟡 Watchlist with localStorage — hook built, not yet surfaced in UI
+- 🔜 European equity coverage (alternative data provider)
+- 🔜 Real-time price integration
+
+✅ = Shipped  🟡 = Prototype built  🔜 = Planned
 
 ## Author
 

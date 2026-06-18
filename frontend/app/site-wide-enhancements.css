@@ -1,0 +1,351 @@
+/* === Site-Wide Premium Design Enhancements === */
+
+/* ============================================================
+   VALUATION REPORT PAGE ENHANCEMENTS
+   ============================================================ */
+
+/* Ticker header with magnetic hover */
+.ticker-header {
+  transition: all 0.3s cubic-bezier(0.2, 0.75, 0.2, 1);
+}
+
+.ticker-header:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.08);
+  border-color: var(--border-strong);
+}
+
+/* Enhanced valuation cards */
+.valuation-section {
+  transition: all 0.3s cubic-bezier(0.2, 0.75, 0.2, 1);
+  position: relative;
+  overflow: hidden;
+}
+
+.valuation-section::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(125, 211, 252, 0.04),
+    transparent
+  );
+  transition: left 0.6s cubic-bezier(0.2, 0.75, 0.2, 1);
+  pointer-events: none;
+}
+
+.valuation-section:hover::before {
+  left: 100%;
+}
+
+.valuation-section:hover {
+  border-color: var(--border-strong);
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.06);
+}
+
+/* DCF metrics with staggered entrance */
+@keyframes dcfMetricSlide {
+  from {
+    opacity: 0;
+    transform: translateX(-12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+.dcf-metric {
+  animation: dcfMetricSlide 400ms cubic-bezier(0.2, 0.75, 0.2, 1) both;
+  animation-delay: calc(var(--metric-index, 0) * 80ms + 200ms);
+  transition: all 0.25s cubic-bezier(0.2, 0.75, 0.2, 1);
+}
+
+.dcf-metric:hover {
+  transform: scale(1.03);
+  border-color: var(--accent);
+  background: var(--bg-card);
+}
+
+/* Model diagnostics cards */
+.model-diagnostic-card {
+  transition: all 0.25s cubic-bezier(0.2, 0.75, 0.2, 1);
+}
+
+.model-diagnostic-card:hover {
+  transform: translateY(-2px);
+  border-color: var(--border-strong);
+  background: var(--bg-card);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.06);
+}
+
+/* Export PDF button enhancement */
+.export-pdf-button {
+  position: relative;
+  overflow: hidden;
+  transition: all 0.3s cubic-bezier(0.2, 0.75, 0.2, 1);
+}
+
+.export-pdf-button:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.1);
+}
+
+/* ============================================================
+   ABOUT PAGE ENHANCEMENTS
+   ============================================================ */
+
+/* About hero cards with staggered entrance */
+@keyframes aboutCardSlideUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.about-highlight-card {
+  animation: aboutCardSlideUp 500ms cubic-bezier(0.2, 0.75, 0.2, 1) both;
+  animation-delay: calc(var(--card-index, 0) * 120ms + 400ms);
+  transition: all 0.3s cubic-bezier(0.2, 0.75, 0.2, 1);
+}
+
+.about-highlight-glow:hover .about-highlight-card {
+  transform: translateY(-4px);
+}
+
+/* Author avatar enhancement */
+.author-avatar {
+  transition: all 0.3s cubic-bezier(0.2, 0.75, 0.2, 1);
+}
+
+.author-avatar:hover {
+  transform: scale(1.1) rotate(5deg);
+  border-color: var(--accent);
+  box-shadow: 0 4px 16px rgba(125, 211, 252, 0.25);
+}
+
+/* ============================================================
+   METHODOLOGY PAGE ENHANCEMENTS
+   ============================================================ */
+
+/* Methodology index hover */
+.folder-nav-item {
+  position: relative;
+  overflow: hidden;
+}
+
+.folder-nav-item::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: var(--accent);
+  transform: scaleY(0);
+  transition: transform 0.3s cubic-bezier(0.2, 0.75, 0.2, 1);
+}
+
+.folder-nav-item:hover::before {
+  transform: scaleY(1);
+}
+
+/* Method summary cards */
+.method-summary-card {
+  transition: all 0.3s cubic-bezier(0.2, 0.75, 0.2, 1);
+}
+
+.method-summary-glow:hover .method-summary-card {
+  transform: translateY(-3px);
+  background: var(--bg-card);
+}
+
+/* Pipeline steps with sequential reveal */
+@keyframes pipelineStepReveal {
+  from {
+    opacity: 0;
+    transform: translateX(-16px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+.pipeline-step {
+  animation: pipelineStepReveal 400ms cubic-bezier(0.2, 0.75, 0.2, 1) both;
+  animation-delay: calc(var(--step-index, 0) * 100ms + 500ms);
+  transition: all 0.3s cubic-bezier(0.2, 0.75, 0.2, 1);
+}
+
+.pipeline-step:hover {
+  transform: translateY(-3px);
+  border-color: var(--accent);
+  background: var(--bg-card);
+}
+
+/* ============================================================
+   HEADER ENHANCEMENTS
+   ============================================================ */
+
+/* App header animation */
+@keyframes headerSlideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.app-header {
+  animation: headerSlideDown 400ms cubic-bezier(0.2, 0.75, 0.2, 1) both;
+  transition: all 0.3s cubic-bezier(0.2, 0.75, 0.2, 1);
+}
+
+/* Nav links with underline */
+.nav-link {
+  position: relative;
+}
+
+.nav-link::after {
+  content: "";
+  position: absolute;
+  bottom: -2px;
+  left: 0;
+  width: 0;
+  height: 1px;
+  background: var(--accent);
+  transition: width 0.3s cubic-bezier(0.2, 0.75, 0.2, 1);
+}
+
+.nav-link:hover::after {
+  width: 100%;
+}
+
+/* Theme toggle enhanced */
+.theme-toggle {
+  transition: all 0.3s cubic-bezier(0.2, 0.75, 0.2, 1);
+}
+
+.theme-toggle:hover {
+  transform: scale(1.1);
+}
+
+/* ============================================================
+   SHARED ENHANCEMENTS
+   ============================================================ */
+
+/* Section kicker universal enhancement */
+.section-kicker,
+.panel-eyebrow {
+  position: relative;
+  display: inline-block;
+}
+
+.section-kicker::after,
+.panel-eyebrow::after {
+  content: "";
+  position: absolute;
+  bottom: -2px;
+  left: 0;
+  width: 0;
+  height: 1px;
+  background: var(--accent);
+  transition: width 0.4s cubic-bezier(0.2, 0.75, 0.2, 1);
+}
+
+.section-header:hover .section-kicker::after,
+.hero-chart-header:hover .panel-eyebrow::after {
+  width: 100%;
+}
+
+/* Back link with arrow */
+.back-link {
+  position: relative;
+  padding-left: 18px;
+}
+
+.back-link::before {
+  content: "←";
+  position: absolute;
+  left: 0;
+  transition: transform 0.3s cubic-bezier(0.2, 0.75, 0.2, 1);
+}
+
+.back-link:hover::before {
+  transform: translateX(-4px);
+}
+
+/* ============================================================
+   MOBILE OPTIMIZATIONS
+   ============================================================ */
+
+@media (max-width: 768px) {
+  /* Disable heavy effects on mobile */
+  .valuation-section::before,
+  .folder-nav-item::before {
+    display: none;
+  }
+
+  /* Simplify hover transforms */
+  .ticker-header:hover,
+  .valuation-section:hover,
+  .dcf-metric:hover,
+  .model-diagnostic-card:hover,
+  .about-highlight-glow:hover .about-highlight-card,
+  .author-avatar:hover,
+  .method-summary-glow:hover .method-summary-card,
+  .pipeline-step:hover,
+  .export-pdf-button:hover,
+  .theme-toggle:hover {
+    transform: none;
+  }
+}
+
+/* ============================================================
+   ACCESSIBILITY
+   ============================================================ */
+
+@media (prefers-reduced-motion: reduce) {
+  /* Disable all animations */
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* ============================================================
+   DARK THEME VARIANTS
+   ============================================================ */
+
+[data-theme="dark"] .valuation-section::before {
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(125, 211, 252, 0.08),
+    transparent
+  );
+}
+
+[data-theme="dark"] .valuation-section:hover {
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.3);
+}
+
+[data-theme="dark"] .author-avatar:hover {
+  box-shadow: 0 4px 16px rgba(125, 211, 252, 0.35);
+}

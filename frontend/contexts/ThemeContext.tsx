@@ -27,6 +27,8 @@ function applyTheme(theme: Theme): void {
 
 function readInitialTheme(): Theme {
   if (typeof window === "undefined") return "light";
+  const domTheme = document.documentElement.getAttribute("data-theme");
+  if (domTheme === "dark" || domTheme === "light") return domTheme;
   try {
     const stored = window.localStorage.getItem("theme");
     if (stored === "dark" || stored === "light") return stored;
@@ -38,13 +40,19 @@ function readInitialTheme(): Theme {
 }
 
 export function ThemeProvider({ children }: { children: ReactNode }) {
-  const [theme, setThemeState] = useState<Theme>("light");
+  const [theme, setThemeState] = useState<Theme>(() => readInitialTheme());
 
   useEffect(() => {
     const initial = readInitialTheme();
-    setThemeState(initial);
     applyTheme(initial);
-  }, []);
+    if (initial !== theme) {
+      const frame = window.requestAnimationFrame(() => {
+        setThemeState(initial);
+      });
+      return () => window.cancelAnimationFrame(frame);
+    }
+    return undefined;
+  }, [theme]);
 
   const setTheme = useCallback((next: Theme) => {
     setThemeState(next);

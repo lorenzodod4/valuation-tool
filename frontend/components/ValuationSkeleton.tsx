@@ -10,7 +10,9 @@ interface ValuationSkeletonProps {
 const LOADING_MESSAGES = [
   "Fetching company profile…",
   "Loading financial statements…",
-  "Computing DCF model…",
+  "Selecting valuation method…",
+  "Computing valuation model…",
+  "Solving reverse DCF…",
   "Comparing with peers…",
   "Building football field…",
 ];

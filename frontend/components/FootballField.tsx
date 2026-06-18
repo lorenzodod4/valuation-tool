@@ -12,8 +12,8 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import { useTheme } from "@/contexts/ThemeContext";
 import { formatCurrency } from "@/lib/format";
+import { useThemeColors, type ThemeColors } from "@/lib/useThemeColors";
 
 export type FootballFieldColor =
   | "bull"
@@ -23,9 +23,9 @@ export type FootballFieldColor =
 
 export interface FootballFieldMethod {
   label: string;
-  base: number; // single-point marker (was `value`)
-  low: number | null; // range start; null → degraded single-point fallback
-  high: number | null; // range end; null → degraded single-point fallback
+  base: number;
+  low: number | null;
+  high: number | null;
   color: FootballFieldColor;
 }
 
@@ -34,36 +34,12 @@ interface FootballFieldProps {
   methods: FootballFieldMethod[];
 }
 
-interface ResolvedColors {
-  bull: string;
-  accent: string;
-  // Cyan keeps EV/EBITDA visually distinct from P/E (which uses `accent`,
-  // a similar indigo). Hardcoded — no CSS-var dependency needed because the
-  // color is theme-agnostic enough for both light and dark.
-  cyan: string;
-  bear: string;
-  textPrimary: string;
-  textSecondary: string;
-  textTertiary: string;
-  borderDefault: string;
-}
-
-// Augmented row fed to Recharts. The underscore-prefixed fields are visualization
-// scaffolding (stacked-bar offset/span, label target, fallback flag) — they
-// don't appear in the public type contract.
+// Augmented row fed to Recharts.
 interface MethodRow extends FootballFieldMethod {
   _offset: number;
   _span: number;
   _endValue: number;
   _isPoint: boolean;
-}
-
-function readVar(name: string, fallback: string): string {
-  if (typeof window === "undefined") return fallback;
-  const value = getComputedStyle(document.documentElement)
-    .getPropertyValue(name)
-    .trim();
-  return value || fallback;
 }
 
 function isValidRange(m: FootballFieldMethod): boolean {
@@ -76,10 +52,6 @@ function isValidRange(m: FootballFieldMethod): boolean {
   );
 }
 
-// Chart layout constants — kept as module-level so they're referenced by
-// both the BarChart `margin` prop and the overlay's positioning math. Keeping
-// them in sync is what makes the absolute-positioned tick overlay land on
-// the exact same x as the bars without consulting Recharts internals.
 const CHART_HEIGHT = 280;
 const CHART_MARGIN_TOP = 30;
 const CHART_MARGIN_RIGHT = 80;
@@ -89,40 +61,33 @@ const Y_AXIS_WIDTH = 100;
 const BAR_SIZE = 28;
 
 export function FootballField({ currentPrice, methods }: FootballFieldProps) {
-  const { theme } = useTheme();
-  const [colors, setColors] = useState<ResolvedColors | null>(null);
-
-  // Tracks the live pixel width of the chart container. Used by the
-  // base-marker overlay to map data values to absolute pixel positions
-  // — see comments in the overlay block below for the full math.
+  const colors = useThemeColors();
   const containerRef = useRef<HTMLDivElement | null>(null);
   const [containerWidth, setContainerWidth] = useState(0);
 
-  useEffect(() => {
-    setColors({
-      bull: readVar("--bull", "#16A34A"),
-      accent: readVar("--accent", "#6366F1"),
-      cyan: "#06B6D4",
-      bear: readVar("--bear", "#DC2626"),
-      textPrimary: readVar("--text-primary", "#0F172A"),
-      textSecondary: readVar("--text-secondary", "#475569"),
-      textTertiary: readVar("--text-tertiary", "#64748B"),
-      borderDefault: readVar("--border-default", "#E5E7EB"),
-    });
-  }, [theme]);
+  const summaryLines = methods.map((m) => {
+    const range = isValidRange(m)
+      ? `${formatCurrency(m.low!)} to ${formatCurrency(m.high!)}`
+      : formatCurrency(m.base);
+    const vsMarket =
+      currentPrice != null && currentPrice > 0 && m.base != null
+        ? ` ${m.base >= currentPrice ? "above" : "below"} current price ${formatCurrency(currentPrice)}`
+        : "";
+    return `${m.label}: ${formatCurrency(m.base)} (${range})${vsMarket}`;
+  });
+  const ariaSummary = `Valuation football field. ${summaryLines.join(". ")}.`;
 
   useEffect(() => {
-    const el = containerRef.current;
-    if (!el) return;
-    // Initial sync read so first paint has a width.
-    setContainerWidth(el.getBoundingClientRect().width);
-    if (typeof ResizeObserver === "undefined") return;
+    const containerEl = containerRef.current;
+    if (!containerEl || typeof ResizeObserver === "undefined") return;
+
+    setContainerWidth(containerEl.getBoundingClientRect().width);
     const ro = new ResizeObserver((entries) => {
       for (const entry of entries) {
         setContainerWidth(entry.contentRect.width);
       }
     });
-    ro.observe(el);
+    ro.observe(containerEl);
     return () => ro.disconnect();
   }, []);
 
@@ -134,16 +99,6 @@ export function FootballField({ currentPrice, methods }: FootballFieldProps) {
     );
   }
 
-  if (!colors) {
-    // Initial paint before useEffect resolves CSS vars; keeps the layout stable.
-    return <div className="ff-container" />;
-  }
-
-  // Stacked-bar trick: render a transparent "offset" bar followed by a visible
-  // "span" bar so the colored segment runs from `low` to `high` instead of
-  // from 0 to `base`. When low/high is missing, fall back to a degraded
-  // single-point bar that runs from 0 to base (and we skip the base marker
-  // since the bar's right edge already represents the value).
   const rows: MethodRow[] = methods.map((m) => {
     if (isValidRange(m)) {
       const low = m.low as number;
@@ -165,8 +120,6 @@ export function FootballField({ currentPrice, methods }: FootballFieldProps) {
     };
   });
 
-  // Domain max must account for the highest `high` across methods (not just
-  // bases) so range bars don't get clipped on the right.
   const domainCandidates: number[] = [];
   for (const m of methods) {
     if (Number.isFinite(m.base)) domainCandidates.push(m.base);
@@ -179,9 +132,15 @@ export function FootballField({ currentPrice, methods }: FootballFieldProps) {
   const maxVal = domainCandidates.length > 0 ? Math.max(...domainCandidates) : 0;
   const domainMax = maxVal * 1.18;
 
-  // Tooltip: with stacked bars, Recharts passes one payload entry per Bar.
-  // Both entries share the same `payload` row object, so we just read it from
-  // the first entry that has the `base` field populated.
+  const c = colors as ThemeColors & { cyan: string };
+  const resolvedCyan = c.cyan ?? "#06B6D4";
+  const colorMap: Record<FootballFieldColor, string> = {
+    bull: c.bull,
+    accent: c.accent,
+    cyan: resolvedCyan,
+    bear: c.bear,
+  };
+
   const renderTooltip = (props: {
     active?: boolean;
     payload?: ReadonlyArray<{ payload?: MethodRow }>;
@@ -196,7 +155,7 @@ export function FootballField({ currentPrice, methods }: FootballFieldProps) {
     const hasCurrent = currentPrice != null && currentPrice > 0;
     const delta = hasCurrent ? (item.base - currentPrice) / currentPrice : null;
     const deltaColor =
-      delta == null ? colors.textSecondary : delta >= 0 ? colors.bull : colors.bear;
+      delta == null ? c.textSecondary : delta >= 0 ? c.bull : c.bear;
     return (
       <div className="ff-tooltip">
         <div className="ff-tooltip-label">{item.label}</div>
@@ -221,22 +180,8 @@ export function FootballField({ currentPrice, methods }: FootballFieldProps) {
     return Number.isFinite(n) ? formatCurrency(n) : "";
   };
 
-  // Rows we'll actually draw a tick for (skip degraded single-point rows).
-  // Computed here so the overlay can reuse the same filtered list.
   const markerRows = rows.filter((r) => !r._isPoint && Number.isFinite(r.base));
 
-  // Plotting-area math, mirrored from the chart's own constants:
-  //   plotLeft  = CHART_MARGIN_LEFT + Y_AXIS_WIDTH
-  //   plotRight = containerWidth − CHART_MARGIN_RIGHT
-  //   plotWidth = plotRight − plotLeft
-  // Each value v maps to:   plotLeft + (v / domainMax) × plotWidth
-  // Each row i sits at y center:
-  //   plotTop    = CHART_MARGIN_TOP
-  //   plotHeight = CHART_HEIGHT − CHART_MARGIN_TOP − CHART_MARGIN_BOTTOM
-  //   rowH       = plotHeight / rows.length        (Recharts splits the plot
-  //                                                 area into equal bands;
-  //                                                 first row is at the top)
-  //   centerY    = plotTop + (i + 0.5) × rowH
   const plotLeft = CHART_MARGIN_LEFT + Y_AXIS_WIDTH;
   const plotWidth =
     containerWidth > 0
@@ -253,7 +198,12 @@ export function FootballField({ currentPrice, methods }: FootballFieldProps) {
         ref={containerRef}
         className="ff-container"
         style={{ position: "relative" }}
+        role="img"
+        aria-describedby="ff-summary"
       >
+        <span id="ff-summary" className="sr-only">
+          {ariaSummary}
+        </span>
         <ResponsiveContainer width="100%" height={CHART_HEIGHT}>
           <BarChart
             layout="vertical"
@@ -272,7 +222,7 @@ export function FootballField({ currentPrice, methods }: FootballFieldProps) {
               width={100}
               axisLine={false}
               tickLine={false}
-              tick={{ fontSize: 12, fill: colors.textSecondary }}
+              tick={{ fontSize: 12, fill: c.textSecondary }}
             />
             <Tooltip
               cursor={{ fill: "rgba(99, 102, 241, 0.06)" }}
@@ -281,25 +231,23 @@ export function FootballField({ currentPrice, methods }: FootballFieldProps) {
             {currentPrice != null && currentPrice > 0 ? (
               <ReferenceLine
                 x={currentPrice}
-                stroke={colors.bear}
+                stroke={c.bear}
                 strokeDasharray="4 4"
                 strokeWidth={1.5}
                 label={{
                   value: `Current ${formatCurrency(currentPrice)}`,
                   position: "top",
                   fontSize: 11,
-                  fill: colors.bear,
+                  fill: c.bear,
                 }}
               />
             ) : null}
-            {/* Invisible spacer that pushes the visible segment to start at `low`. */}
             <Bar
               dataKey="_offset"
               stackId="ff"
               fill="transparent"
               isAnimationActive={false}
             />
-            {/* Visible range segment, colored per method. */}
             <Bar
               dataKey="_span"
               stackId="ff"
@@ -308,24 +256,19 @@ export function FootballField({ currentPrice, methods }: FootballFieldProps) {
               isAnimationActive={false}
             >
               {rows.map((r, i) => (
-                <Cell key={i} fill={colors[r.color]} />
+                <Cell key={i} fill={colorMap[r.color]} />
               ))}
               <LabelList
                 dataKey="base"
                 position="right"
                 formatter={labelFormatter}
                 fontSize={11}
-                fill={colors.textSecondary}
+                fill={c.textSecondary}
               />
             </Bar>
           </BarChart>
         </ResponsiveContainer>
 
-        {/* Base-marker overlay. Positioned in absolute pixel space using the
-            chart's own layout constants (mirrored above). Both Recharts
-            integration approaches we tried (Customized props, axis-scale
-            hooks) returned undefined in this Recharts version, so we
-            bypass the library and do the math ourselves. */}
         {overlayReady ? (
           <div
             aria-hidden="true"
@@ -366,7 +309,7 @@ export function FootballField({ currentPrice, methods }: FootballFieldProps) {
           <div key={m.label} className="ff-legend-item">
             <span
               className="ff-legend-dot"
-              style={{ background: colors[m.color] }}
+              style={{ background: colorMap[m.color] }}
               aria-hidden="true"
             />
             {m.label}
@@ -376,7 +319,7 @@ export function FootballField({ currentPrice, methods }: FootballFieldProps) {
           <div className="ff-legend-item">
             <span
               className="ff-legend-dot ff-legend-dashed"
-              style={{ borderColor: colors.bear }}
+              style={{ borderColor: c.bear }}
               aria-hidden="true"
             />
             Current price

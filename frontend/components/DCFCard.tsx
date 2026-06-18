@@ -1,4 +1,6 @@
 import type { DCFResult, WACCBreakdown } from "@/types/valuation";
+import { TriangleAlert } from "lucide-react";
+import { BorderGlow } from "@/components/BorderGlow";
 import {
   abbreviateNumber,
   formatCurrency,
@@ -91,7 +93,7 @@ function WaccBreakdownView({ breakdown }: { breakdown: WACCBreakdown }) {
       <div className="wacc-breakdown-title-row">
         <h4 className="wacc-breakdown-title">WACC Breakdown</h4>
         <span className="wacc-breakdown-source">
-          Source: Damodaran, Jan 2026
+          Model reference inputs · {breakdown.data_as_of}
         </span>
       </div>
 
@@ -157,6 +159,20 @@ export function DCFCard({ dcf }: DCFCardProps) {
 
   const y1Growth = assumptions.revenue_growth_rates?.[0];
 
+  // Terminal Value Exposure: Critical metric for institutional model risk.
+  const tvExposure =
+    dcf.enterprise_value !== 0
+      ? dcf.pv_terminal_value / dcf.enterprise_value
+      : null;
+  const exposureTone =
+    tvExposure == null
+      ? "var(--text-secondary)"
+      : tvExposure > 0.85
+        ? "var(--bear)"
+        : tvExposure > 0.70
+          ? "var(--amber)"
+          : "var(--text-secondary)";
+
   const pills: Array<{ label: string; value: string }> = [
     { label: "WACC", value: pct(assumptions.wacc) },
     { label: "Terminal Growth", value: pct(assumptions.terminal_growth_rate) },
@@ -172,39 +188,59 @@ export function DCFCard({ dcf }: DCFCardProps) {
     <div>
       {dcf.sector_warning ? (
         <div className="dcf-sector-warning" role="note">
-          <span className="dcf-sector-warning-icon" aria-hidden="true">⚠️</span>
+          <TriangleAlert
+            className="dcf-sector-warning-icon"
+            size={16}
+            strokeWidth={1.8}
+            aria-hidden="true"
+          />
           <span>{dcf.sector_warning.message}</span>
         </div>
       ) : null}
       <div className="dcf-metrics">
-        <div className="dcf-metric">
-          <div className="dcf-metric-label">Per Share Value</div>
-          <div className="dcf-metric-value">
-            {formatCurrency(dcf.per_share_value)}
+        <BorderGlow className="report-glow-card kpi-glow" fillOpacity={0.1} glowRadius={18}>
+          <div className="dcf-metric">
+            <div className="dcf-metric-label">Per Share Value</div>
+            <div className="dcf-metric-value">
+              {formatCurrency(dcf.per_share_value)}
+            </div>
+            <div className="dcf-metric-sub">DCF intrinsic</div>
           </div>
-          <div className="dcf-metric-sub">DCF intrinsic</div>
-        </div>
-        <div className="dcf-metric">
-          <div className="dcf-metric-label">Market Price</div>
-          <div className="dcf-metric-value">
-            {formatCurrency(dcf.current_price)}
+        </BorderGlow>
+        <BorderGlow className="report-glow-card kpi-glow" fillOpacity={0.1} glowRadius={18}>
+          <div className="dcf-metric">
+            <div className="dcf-metric-label">Market Price</div>
+            <div className="dcf-metric-value">
+              {formatCurrency(dcf.current_price)}
+            </div>
+            <div className="dcf-metric-sub">Current</div>
           </div>
-          <div className="dcf-metric-sub">Current</div>
-        </div>
-        <div className="dcf-metric">
-          <div className="dcf-metric-label">Upside / Downside</div>
-          <div className="dcf-metric-value" style={{ color: upsideColor }}>
-            {formatPercent(upside)}
+        </BorderGlow>
+        <BorderGlow className="report-glow-card kpi-glow" fillOpacity={0.1} glowRadius={18}>
+          <div className="dcf-metric">
+            <div className="dcf-metric-label">Upside / Downside</div>
+            <div className="dcf-metric-value" style={{ color: upsideColor }}>
+              {formatPercent(upside)}
+            </div>
+            <div className="dcf-metric-sub">vs market price</div>
           </div>
-          <div className="dcf-metric-sub">vs market price</div>
-        </div>
-        <div className="dcf-metric">
-          <div className="dcf-metric-label">Enterprise Value</div>
-          <div className="dcf-metric-value">
-            {abbreviateNumber(dcf.enterprise_value)}
+        </BorderGlow>
+        <BorderGlow className="report-glow-card kpi-glow" fillOpacity={0.1} glowRadius={18}>
+          <div className="dcf-metric">
+            <div className="dcf-metric-label">Enterprise Value</div>
+            <div className="dcf-metric-value">
+              {abbreviateNumber(dcf.enterprise_value)}
+            </div>
+            <div className="dcf-metric-sub">Computed EV</div>
           </div>
-          <div className="dcf-metric-sub">Computed EV</div>
-        </div>
+        </BorderGlow>
+        <BorderGlow className="report-glow-card kpi-glow" fillOpacity={0.1} glowRadius={18}>
+          <div className="dcf-metric">
+            <div className="dcf-metric-label">TV Exposure</div>
+            <div className="dcf-metric-value" style={{ color: exposureTone }}>{pct(tvExposure, 1)}</div>
+            <div className="dcf-metric-sub">% of total EV</div>
+          </div>
+        </BorderGlow>
       </div>
 
       <div className="dcf-table-wrap">
@@ -238,10 +274,12 @@ export function DCFCard({ dcf }: DCFCardProps) {
         <div className="dcf-assumptions-title">Assumptions</div>
         <div className="dcf-assumptions-grid">
           {pills.map((p) => (
-            <div key={p.label} className="dcf-pill">
-              <div className="dcf-pill-label">{p.label}</div>
-              <div className="dcf-pill-value">{p.value}</div>
-            </div>
+            <BorderGlow key={p.label} className="report-glow-card assumption-pill-glow" fillOpacity={0.1} glowRadius={14}>
+              <div className="dcf-pill">
+                <div className="dcf-pill-label">{p.label}</div>
+                <div className="dcf-pill-value">{p.value}</div>
+              </div>
+            </BorderGlow>
           ))}
         </div>
       </div>
@@ -251,11 +289,13 @@ export function DCFCard({ dcf }: DCFCardProps) {
       ) : null}
 
       {dcf.warnings.length > 0 ? (
-        <div className="dcf-warnings">
-          {dcf.warnings.map((w, i) => (
-            <div key={i}>{w}</div>
-          ))}
-        </div>
+        <BorderGlow className="report-glow-card warning-glow" fillOpacity={0.1}>
+          <div className="dcf-warnings">
+            {dcf.warnings.map((w, i) => (
+              <div key={i}>{w}</div>
+            ))}
+          </div>
+        </BorderGlow>
       ) : null}
     </div>
   );

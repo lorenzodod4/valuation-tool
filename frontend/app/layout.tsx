@@ -1,18 +1,11 @@
 import type { Metadata, Viewport } from "next";
-import { Inter, Geist_Mono } from "next/font/google";
+import Script from "next/script";
 import "./globals.css";
+import "./landing-fixes.css";
+import "./landing-upgrades.css";
+import "./site-wide-enhancements.css";
 import { Header } from "@/components/Header";
 import { ThemeProvider } from "@/contexts/ThemeContext";
-
-const inter = Inter({
-  subsets: ["latin"],
-  variable: "--font-sans",
-});
-
-const geistMono = Geist_Mono({
-  subsets: ["latin"],
-  variable: "--font-geist-mono",
-});
 
 export const metadata: Metadata = {
   title: "Valuation Tool",
@@ -41,15 +34,13 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html
-      lang="en"
-      suppressHydrationWarning
-      className={`${inter.variable} ${geistMono.variable} h-full`}
-    >
-      <head>
-        <script dangerouslySetInnerHTML={{ __html: themeBootstrap }} />
-      </head>
+    <html lang="en" suppressHydrationWarning className="h-full">
       <body className="min-h-full flex flex-col antialiased">
+        <Script
+          id="theme-bootstrap"
+          strategy="beforeInteractive"
+          dangerouslySetInnerHTML={{ __html: themeBootstrap }}
+        />
         <ThemeProvider>
           <Header />
           <div className="flex-1 flex flex-col">{children}</div>

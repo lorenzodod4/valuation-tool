@@ -1,5 +1,6 @@
 """Financial Modeling Prep data fetcher (FMP /stable endpoints, sync httpx)."""
 
+import logging
 import threading
 import time
 from datetime import datetime, timezone
@@ -7,12 +8,34 @@ from typing import Any
 
 import httpx
 
+
+class FmpProviderError(Exception):
+    """Base for provider-side errors that are not local faults."""
+
+
+class PremiumTickerError(FmpProviderError):
+    """Raised when a ticker requires a premium FMP subscription."""
+
+
+class QuotaExhaustedError(FmpProviderError):
+    """Raised when all keys are over their daily call budget."""
+
+
+class InvalidApiKeyError(FmpProviderError):
+    """Raised when an FMP API key is invalid or revoked."""
+
+
+class TickerNotFoundError(FmpProviderError):
+    """Raised when a ticker is not found in FMP."""
+
 from app.config import (
     FMP_API_KEYS,
     FMP_BASE_URL,
     HTTP_TIMEOUT_SECONDS,
 )
 from app.services.cache import PersistentCache
+
+logger = logging.getLogger(__name__)
 
 
 class KeyRotator:
@@ -43,9 +66,10 @@ class KeyRotator:
             self._maybe_reset()
             for idx, key in enumerate(self._keys, start=1):
                 if key not in self._exhausted_today:
-                    print(
-                        f"[KeyRotator] Using key #{idx} (last 4: ...{key[-4:]})",
-                        flush=True,
+                    logger.info(
+                        "Using FMP key #%s (last 4: ...%s)",
+                        idx,
+                        key[-4:],
                     )
                     return key
             raise RuntimeError(
@@ -58,10 +82,11 @@ class KeyRotator:
                 idx: Any = self._keys.index(key) + 1
             except ValueError:
                 idx = "?"
-            print(
-                f"[KeyRotator] Marking key #{idx} as exhausted "
-                f"(reason: {reason}, last 4: ...{key[-4:]})",
-                flush=True,
+            logger.warning(
+                "Marking FMP key #%s as exhausted (reason: %s, last 4: ...%s)",
+                idx,
+                reason,
+                key[-4:],
             )
             self._exhausted_today.add(key)
 
@@ -272,14 +297,37 @@ class FinancialDataFetcher:
 
                 status = response.status_code
                 if status in (401, 403):
-                    raise PermissionError("Invalid FMP API key")
-                if status in (402, 429):
-                    # 402 from a single key doesn't mean the ticker is premium-
-                    # only — FMP returns 402 inconsistently when a specific key
-                    # is downgraded/restricted. Same response as 429: burn the
-                    # key for the day and let the outer loop pick the next one.
-                    reason = "402" if status == 402 else "429"
-                    _rotator.mark_exhausted(current_key, reason=reason)
+                    raise InvalidApiKeyError("Invalid FMP API key")
+                if status == 429:
+                    # Genuine rate-limit: burn this key and rotate.
+                    _rotator.mark_exhausted(current_key, reason="429")
+                    attempts.append((current_key, status))
+                    rotated_for_quota = True
+                    break
+                if status == 402:
+                    # 402 may mean:
+                    #  a) premium ticker (ticker-specific, do NOT burn key)
+                    #  b) key plan restriction (global, burn key)
+                    # Inspect body to decide.
+                    body_text = ""
+                    try:
+                        body_text = response.text[:500]
+                    except Exception:
+                        pass
+                    lower_body = body_text.lower()
+                    if any(
+                        token in lower_body
+                        for token in ("premium", "subscription", "ticker", "not available")
+                    ):
+                        # Ticker-specific premium error — stop trying this ticker
+                        # on all keys without burning them.
+                        raise PremiumTickerError(
+                            "Ticker requires premium FMP subscription. "
+                            "This may be a non-US listed equity or a ticker "
+                            "outside the free tier."
+                        )
+                    # Otherwise treat as key-level restriction and burn.
+                    _rotator.mark_exhausted(current_key, reason="402")
                     attempts.append((current_key, status))
                     rotated_for_quota = True
                     break
@@ -287,9 +335,13 @@ class FinancialDataFetcher:
                     if attempt == 0:
                         time.sleep(1)
                         continue
-                    raise RuntimeError(f"FMP server error ({status})")
+                    raise FmpProviderError(f"FMP server error ({status})")
+                if status == 404:
+                    raise TickerNotFoundError(
+                        f"Ticker not found in FMP ({response.text[:200]})"
+                    )
                 if status >= 400:
-                    raise RuntimeError(
+                    raise FmpProviderError(
                         f"FMP request failed ({status}): {response.text[:200]}"
                     )
 
@@ -412,6 +464,10 @@ class FinancialDataFetcher:
         # wants the positive magnitude, so absolute-value at the boundary.
         capex_raw = cls._to_float(raw.get("capitalExpenditure"))
         capex = abs(capex_raw) if capex_raw is not None else None
+        
+        # Dividends paid (also a negative outflow, store as-is for DDM)
+        dividends_paid = cls._to_float(raw.get("dividendsPaid"))
+        
         return {
             "date": raw.get("date"),
             "year": cls._to_int(raw.get("calendarYear")),
@@ -419,6 +475,7 @@ class FinancialDataFetcher:
             "free_cash_flow": cls._to_float(raw.get("freeCashFlow")),
             "wc_change": cls._to_float(raw.get("changeInWorkingCapital")),
             "da": cls._to_float(raw.get("depreciationAndAmortization")),
+            "dividends_paid": dividends_paid,
         }
 
     @classmethod

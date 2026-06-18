@@ -1,0 +1,458 @@
+/* === Landing Page Premium Upgrades === */
+
+/* Smooth scroll behavior for the entire page */
+html.landing-page-scroll {
+  scroll-behavior: smooth;
+}
+
+/* Enhanced market bars with subtle pulsing */
+@keyframes marketBarGentlePulse {
+  0%, 100% {
+    opacity: 0.82;
+    transform: scaleY(0.98);
+  }
+  50% {
+    opacity: 0.92;
+    transform: scaleY(1);
+  }
+}
+
+.market-bar {
+  animation: marketBarGentlePulse 3s ease-in-out infinite;
+  animation-delay: calc(var(--bar-index) * 0.1s);
+}
+
+/* Staggered animation for preview metrics */
+@keyframes metricFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.preview-metric {
+  animation: metricFadeIn 500ms cubic-bezier(0.2, 0.75, 0.2, 1) both;
+  animation-delay: calc(var(--metric-index) * 100ms + 1200ms);
+}
+
+/* Subtle range fill animations */
+@keyframes rangeFillExpand {
+  from {
+    transform: scaleX(0);
+    transform-origin: left center;
+  }
+  to {
+    transform: scaleX(1);
+    transform-origin: left center;
+  }
+}
+
+.range-fill {
+  animation: rangeFillExpand 800ms cubic-bezier(0.2, 0.75, 0.2, 1) both;
+  animation-delay: calc(var(--range-index) * 150ms + 1500ms);
+}
+
+/* Enhanced workflow card hover with scale */
+.workflow-card {
+  position: relative;
+  overflow: hidden;
+  transition: all 0.3s cubic-bezier(0.2, 0.75, 0.2, 1);
+}
+
+.workflow-card::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(125, 211, 252, 0.08),
+    transparent
+  );
+  transition: left 0.6s cubic-bezier(0.2, 0.75, 0.2, 1);
+  pointer-events: none;
+}
+
+.workflow-card:hover::before {
+  left: 100%;
+}
+
+.workflow-card:hover {
+  transform: translateY(-4px) scale(1.02);
+}
+
+/* Feature cards with improved depth on hover */
+.feature-card {
+  position: relative;
+  transition: all 0.3s cubic-bezier(0.2, 0.75, 0.2, 1);
+}
+
+.feature-card::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: radial-gradient(
+    circle at var(--mouse-x, 50%) var(--mouse-y, 50%),
+    rgba(125, 211, 252, 0.06),
+    transparent 60%
+  );
+  opacity: 0;
+  transition: opacity 0.3s ease;
+  pointer-events: none;
+}
+
+.feature-card:hover::after {
+  opacity: 1;
+}
+
+.feature-card:hover {
+  transform: translateY(-3px) scale(1.01);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.12);
+}
+
+/* Premium glow effect on CTA */
+.landing-cta {
+  position: relative;
+  overflow: hidden;
+}
+
+.landing-cta::before {
+  content: "";
+  position: absolute;
+  top: -50%;
+  left: -50%;
+  width: 200%;
+  height: 200%;
+  background: radial-gradient(
+    circle,
+    rgba(125, 211, 252, 0.08) 0%,
+    transparent 60%
+  );
+  opacity: 0;
+  transition: opacity 0.6s ease;
+  pointer-events: none;
+  animation: ctaGlowRotate 8s linear infinite;
+}
+
+.landing-cta:hover::before {
+  opacity: 1;
+}
+
+@keyframes ctaGlowRotate {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Subtle ticker chip animation on hover */
+.ticker-chip {
+  position: relative;
+  overflow: hidden;
+}
+
+.ticker-chip::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(125, 211, 252, 0.15),
+    transparent
+  );
+  transition: left 0.4s cubic-bezier(0.2, 0.75, 0.2, 1);
+}
+
+.ticker-chip:hover::before {
+  left: 100%;
+}
+
+/* Enhanced price grid with scale effect */
+.hero-price-grid > div {
+  transition: all 0.25s cubic-bezier(0.2, 0.75, 0.2, 1);
+}
+
+.hero-price-grid > div:hover {
+  transform: scale(1.05);
+  background: var(--bg-card);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+}
+
+/* Smooth fade for footer */
+.landing-footer {
+  transition: all 0.3s ease;
+}
+
+.landing-footer:hover {
+  box-shadow: 0 -4px 24px rgba(0, 0, 0, 0.04);
+  border-color: var(--border-strong);
+}
+
+/* Section headers with subtle entrance */
+@keyframes sectionHeaderSlide {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.section-kicker {
+  position: relative;
+  display: inline-block;
+}
+
+.section-kicker::after {
+  content: "";
+  position: absolute;
+  bottom: -4px;
+  left: 0;
+  width: 0;
+  height: 1px;
+  background: var(--accent);
+  transition: width 0.4s cubic-bezier(0.2, 0.75, 0.2, 1);
+}
+
+.landing-section:hover .section-kicker::after {
+  width: 100%;
+}
+
+/* Feature strip enhanced interaction */
+.feature-strip span {
+  position: relative;
+  overflow: hidden;
+}
+
+.feature-strip span::before {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 0;
+  height: 0;
+  border-radius: 50%;
+  background: rgba(125, 211, 252, 0.15);
+  transform: translate(-50%, -50%);
+  transition: width 0.4s ease, height 0.4s ease;
+}
+
+.feature-strip span:hover::before {
+  width: 200%;
+  height: 200%;
+}
+
+/* Terminal and preview cards with enhanced depth */
+.hero-stage-card {
+  transition: all 0.4s cubic-bezier(0.2, 0.75, 0.2, 1);
+  will-change: transform;
+}
+
+.card-terminal:hover {
+  transform: translateY(-22px) translateX(-18px) skewY(-1.2deg) rotateX(2deg) scale(1.015);
+  box-shadow: 0 16px 42px rgba(0, 0, 0, 0.12);
+}
+
+.card-preview:hover {
+  transform: translateY(44px) translateX(8px) skewY(1.2deg) rotateX(-2deg) scale(1.012);
+  box-shadow: 0 20px 54px rgba(0, 0, 0, 0.13);
+}
+
+/* Methodology link with reveal effect */
+.methodology-link-card {
+  position: relative;
+  overflow: hidden;
+}
+
+.methodology-link-card::before {
+  content: "";
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  width: 100%;
+  height: 0;
+  background: linear-gradient(
+    to top,
+    rgba(125, 211, 252, 0.06),
+    transparent
+  );
+  transition: height 0.4s cubic-bezier(0.2, 0.75, 0.2, 1);
+}
+
+.methodology-link-card:hover::before {
+  height: 100%;
+}
+
+.methodology-link-card:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+}
+
+/* Trust section cards with subtle lift */
+.trust-grid {
+  position: relative;
+}
+
+.trust-grid p {
+  transition: all 0.3s cubic-bezier(0.2, 0.75, 0.2, 1);
+  padding: 12px;
+  border-radius: 8px;
+  margin: -12px;
+}
+
+.trust-grid p:hover {
+  background: var(--bg-card);
+  transform: translateX(4px);
+  box-shadow: -4px 0 0 var(--accent);
+}
+
+/* Hero title enhanced gradient shimmer */
+@keyframes premiumShimmer {
+  0%, 100% {
+    background-position: -200% center;
+  }
+  50% {
+    background-position: 200% center;
+  }
+}
+
+.hero-word-accent {
+  background-size: 200% auto;
+  animation: premiumShimmer 8s ease-in-out infinite;
+}
+
+/* Search bar enhanced focus with glow pulse */
+@keyframes searchGlowPulse {
+  0%, 100% {
+    box-shadow: 0 0 0 3px var(--focus-ring), 0 0 20px rgba(14, 165, 233, 0.08);
+  }
+  50% {
+    box-shadow: 0 0 0 3px var(--focus-ring), 0 0 30px rgba(14, 165, 233, 0.15);
+  }
+}
+
+.hero-search-form:focus-within {
+  animation: searchGlowPulse 2s ease-in-out infinite;
+}
+
+/* Dot field subtle parallax on scroll */
+.landing-dotfield {
+  transition: transform 0.1s ease-out;
+}
+
+/* Enhanced button press effect */
+.hero-btn:active,
+.btn-primary:active,
+.ticker-chip:active {
+  transform: scale(0.96);
+  transition: transform 0.1s ease;
+}
+
+/* Dashboard cards with magnetic hover */
+@keyframes cardMagneticPulse {
+  0%, 100% {
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+  }
+  50% {
+    box-shadow: 0 8px 32px rgba(125, 211, 252, 0.15);
+  }
+}
+
+.landing-dashboard-stack .home-glow-card {
+  transition: all 0.5s cubic-bezier(0.2, 0.75, 0.2, 1);
+}
+
+.landing-dashboard-stack .home-glow-card:hover {
+  animation: cardMagneticPulse 2s ease-in-out infinite;
+}
+
+/* Section reveal on scroll (subtle) */
+.landing-section {
+  transition: opacity 0.4s ease, transform 0.4s ease;
+}
+
+/* Responsive: disable heavy effects on mobile */
+@media (max-width: 768px) {
+  .workflow-card::before,
+  .feature-card::after,
+  .landing-cta::before,
+  .ticker-chip::before,
+  .feature-strip span::before,
+  .methodology-link-card::before {
+    display: none;
+  }
+
+  .market-bar {
+    animation: none;
+  }
+
+  .card-terminal:hover,
+  .card-preview:hover {
+    transform: none;
+    box-shadow: none;
+  }
+
+  .landing-dashboard-stack .home-glow-card:hover {
+    animation: none;
+  }
+}
+
+/* Dark theme enhancements */
+[data-theme="dark"] .workflow-card::before {
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(125, 211, 252, 0.12),
+    transparent
+  );
+}
+
+[data-theme="dark"] .feature-card::after {
+  background: radial-gradient(
+    circle at var(--mouse-x, 50%) var(--mouse-y, 50%),
+    rgba(125, 211, 252, 0.1),
+    transparent 60%
+  );
+}
+
+[data-theme="dark"] .feature-card:hover {
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.3);
+}
+
+[data-theme="dark"] .hero-price-grid > div:hover {
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
+}
+
+/* Accessibility: respect reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  .market-bar,
+  .preview-metric,
+  .range-fill,
+  .hero-word-accent {
+    animation: none !important;
+  }
+
+  .workflow-card:hover,
+  .feature-card:hover,
+  .hero-price-grid > div:hover,
+  .card-terminal:hover,
+  .card-preview:hover {
+    transform: none !important;
+  }
+}

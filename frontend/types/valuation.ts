@@ -77,6 +77,27 @@ export interface DCFResult {
   sector_warning?: SectorWarning | null;
 }
 
+export interface DDMProjection {
+  year: number;
+  dps: number;
+  pv_dps: number;
+}
+
+export interface DDMResult {
+  model: "ddm";
+  projections: DDMProjection[];
+  terminal_value_per_share: number | null;
+  pv_terminal_value: number | null;
+  per_share_value: number | null;
+  current_price: number | null;
+  upside_pct: number | null;
+  dividend_yield: number | null;
+  latest_dps: number | null;
+  assumptions_used: Record<string, unknown>;
+  wacc_breakdown?: WACCBreakdown | null;
+  warnings: string[];
+}
+
 export interface PeerMultiples {
   ticker: string;
   symbol?: string;
@@ -97,6 +118,8 @@ export interface PeerStatistic {
   mean: number | null;
   min: number | null;
   max: number | null;
+  p25?: number | null;
+  p75?: number | null;
   count: number;
 }
 
@@ -110,6 +133,8 @@ export interface PeerStatistics {
 export interface ImpliedValuation {
   implied_market_cap: number | null;
   implied_per_share: number | null;
+  implied_per_share_low?: number | null;
+  implied_per_share_high?: number | null;
   multiple_used: number | null;
   implied_enterprise_value?: number | null;
 }
@@ -125,16 +150,21 @@ export interface MultiplesResult {
   peer_statistics: {
     peers: PeerMultiples[];
     statistics: PeerStatistics;
+    skipped_peers?: Array<{ symbol: string; reason: string }>;
   };
   implied_valuations: ImpliedValuations;
   current_price: number | null;
   peers_used: string[];
+  peer_source?: "custom" | "fmp_stock_peers" | "static_fallback" | string | null;
+  warnings?: string[];
 }
 
 export interface FullValuation {
   profile: CompanyProfile;
-  dcf: DCFResult;
+  dcf: DCFResult | null;
+  ddm: DDMResult | null;
   multiples: MultiplesResult;
+  primary_model: "dcf" | "ddm";
 }
 
 export type HistoricalFinancials = {
@@ -155,3 +185,19 @@ export type SensitivityTable = {
   grid: (number | null)[][];
   current_price: number | null;
 };
+
+export interface ReverseDCFResult {
+  implied_growth_rate: number;
+  target_price: number;
+  base_assumptions_growth: number | null;
+  base_fair_value: number | null;
+  margin_of_safety: number | null;
+  interpretation: string;
+  wacc: number | null;
+  terminal_growth_rate: number | null;
+  solver_status: "solved" | "below_range" | "above_range" | "unstable" | string;
+  growth_floor: number;
+  growth_ceiling: number;
+  fair_value_at_growth_floor: number | null;
+  fair_value_at_growth_ceiling: number | null;
+}

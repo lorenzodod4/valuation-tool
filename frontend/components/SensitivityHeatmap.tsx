@@ -1,6 +1,7 @@
 "use client";
 
 import { Fragment } from "react";
+import { TriangleAlert } from "lucide-react";
 import { formatCurrency } from "@/lib/format";
 import type { SectorWarning, SensitivityTable } from "@/types/valuation";
 
@@ -39,7 +40,12 @@ export function SensitivityHeatmap({
     <div className="sensitivity-heatmap">
       {sectorWarning ? (
         <div className="dcf-sector-warning" role="note">
-          <span className="dcf-sector-warning-icon" aria-hidden="true">⚠️</span>
+          <TriangleAlert
+            className="dcf-sector-warning-icon"
+            size={16}
+            strokeWidth={1.8}
+            aria-hidden="true"
+          />
           <span>{sectorWarning.message}</span>
         </div>
       ) : null}
