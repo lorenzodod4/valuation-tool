@@ -160,3 +160,56 @@ def test_rate_limiter_blocks_and_sets_retry_after():
     assert [c.get("/api/valuation/x").status_code for _ in range(4)] == [200, 200, 200, 429]
     assert int(c.get("/api/valuation/x").headers["Retry-After"]) >= 1
     assert c.get("/health").status_code == 200  # non-valuation paths are exempt
+
+
+def test_non_finite_model_output_becomes_null_not_500(monkeypatch):
+    from app.api import valuation
+
+    original = valuation._dcf.run_dcf
+
+    def degenerate(*args, **kwargs):
+        result = original(*args, **kwargs)
+        result["per_share_value"] = float("inf")
+        result["upside_pct"] = float("nan")
+        return result
+
+    monkeypatch.setattr(valuation._dcf, "run_dcf", degenerate)
+    r = client.get("/api/valuation/NWND/dcf")
+    assert r.status_code == 200
+    assert r.json()["per_share_value"] is None
+    assert r.json()["upside_pct"] is None
+    assert "NaN" not in r.text and "Infinity" not in r.text
+
+
+def test_cold_ticker_budget_counts_distinct_uncached_tickers():
+    from app.main import ColdTickerBudget
+
+    budget = ColdTickerBudget(per_hour=2)
+    assert budget.allow("1.1.1.1", "AAA", 0)[0]
+    assert budget.allow("1.1.1.1", "AAA", 1)[0]  # same ticker: free
+    assert budget.allow("1.1.1.1", "BBB", 2)[0]
+    allowed, retry = budget.allow("1.1.1.1", "CCC", 3)
+    assert not allowed and retry > 3000
+    assert budget.allow("2.2.2.2", "CCC", 3)[0]  # other client unaffected
+    assert budget.allow("1.1.1.1", "CCC", 3601)[0]  # window slides
+
+
+def test_cold_ticker_budget_enforced_but_cached_tickers_stay_free(monkeypatch):
+    import app.main as main
+
+    monkeypatch.setattr(main, "COLD_TICKERS_PER_HOUR", 1)
+    mini = FastAPI()
+    mini.add_middleware(RateLimitMiddleware, requests_per_window=1000, window_seconds=60)
+
+    @mini.get("/api/valuation/{ticker}/full")
+    def full(ticker: str) -> dict:
+        from app.services.data_fetcher import FinancialDataFetcher
+        FinancialDataFetcher().get_profile(ticker)  # warms the cache like the real route
+        return {"ok": True}
+
+    c = TestClient(mini)
+    assert c.get("/api/valuation/NWND/full").status_code == 200  # cold, uses the budget
+    assert c.get("/api/valuation/NWND/full").status_code == 200  # now cached: free
+    r = c.get("/api/valuation/HRBR/full")  # second cold ticker within the hour
+    assert r.status_code == 429
+    assert "previously analysed" in r.json()["detail"].lower()

@@ -136,42 +136,42 @@ export function ValuationContent({ data, historical, sensitivity, reverseDcf }: 
           <div className="summary-item">
             <dt>Market price</dt>
             <dd className="figure">{formatCurrency(price, 2, currency)}</dd>
-            <span className="summary-note">{profile.exchange ?? "Exchange n/a"} · may be delayed</span>
+            <dd className="summary-note">{profile.exchange ?? "Exchange n/a"} · may be delayed</dd>
           </div>
           <div className="summary-item summary-item-primary">
             <dt>{isDDM ? "DDM value" : "DCF value"} / share</dt>
             <dd className="figure">{formatCurrency(intrinsic, 2, currency)}</dd>
-            <span className="summary-note">
+            <dd className="summary-note">
               {intrinsic == null
                 ? "Model unavailable — see notices"
                 : intrinsic <= 0
                   ? "Non-positive: model not meaningful here"
                   : "Intrinsic estimate, base case"}
-            </span>
+            </dd>
           </div>
           <div className="summary-item">
             <dt>Upside / downside</dt>
             <dd className={`figure tone-${toneOf(upside)}`}>
               {intrinsic != null && intrinsic <= 0 ? "NM" : formatPercent(upside)}
             </dd>
-            <span className="summary-note">vs market price</span>
+            <dd className="summary-note">vs market price</dd>
           </div>
           <div className="summary-item">
             <dt>Range across methods</dt>
             <dd className="figure">
               {range ? `${formatCurrency(range.low, 0, currency)} – ${formatCurrency(range.high, 0, currency)}` : "—"}
             </dd>
-            <span className="summary-note">
+            <dd className="summary-note">
               {rows.length} method{rows.length === 1 ? "" : "s"}
               {rows.length > 0 && !range ? " · no positive values" : ""}
-            </span>
+            </dd>
           </div>
           <div className="summary-item">
             <dt>{isDDM ? "Cost of equity" : "WACC"} · terminal g</dt>
             <dd className="figure">
               {formatRate(discountRate)} <span className="summary-sep">·</span> {formatRate(assumptions.terminal_growth_rate)}
             </dd>
-            <span className="summary-note">CAPM, Damodaran inputs</span>
+            <dd className="summary-note">CAPM, Damodaran inputs</dd>
           </div>
         </dl>
 

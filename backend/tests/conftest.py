@@ -12,6 +12,7 @@ os.environ["FMP_FIXTURE_DIR"] = str(FIXTURE_DIR)
 os.environ["FMP_CACHE_PATH"] = ":memory:"
 os.environ.setdefault("FMP_API_KEY_1", "test-key-one")
 os.environ["RATE_LIMIT_REQUESTS"] = "100000"
+os.environ["COLD_TICKERS_PER_HOUR"] = "0"  # dedicated tests opt in explicitly
 
 import pytest  # noqa: E402
 

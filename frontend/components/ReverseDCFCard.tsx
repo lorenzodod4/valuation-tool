@@ -64,24 +64,24 @@ export function ReverseDCFCard({ ticker, currency, initialData, onResultChange }
         <div className="kpi">
           <dt>Implied revenue growth</dt>
           <dd className="figure">{formatRate(data.implied_growth_rate, 1)}</dd>
-          <span className="kpi-note">uniform, Y1–Y5</span>
+          <dd className="kpi-note">uniform, Y1–Y5</dd>
         </div>
         <div className="kpi">
           <dt>Model base growth (Y1)</dt>
           <dd className="figure">{formatRate(data.base_assumptions_growth, 1)}</dd>
-          <span className="kpi-note">
+          <dd className="kpi-note">
             Gap <span className="num">{gap == null ? "—" : `${formatPercent(gap).replace("%", "")} pts`}</span>
-          </span>
+          </dd>
         </div>
         <div className="kpi">
           <dt>Price tested</dt>
           <dd className="figure">{formatCurrency(data.target_price, 2, currency)}</dd>
-          <span className="kpi-note">{custom ? "Custom target" : "Market price"}</span>
+          <dd className="kpi-note">{custom ? "Custom target" : "Market price"}</dd>
         </div>
         <div className="kpi">
           <dt>Base DCF vs price</dt>
           <dd className={`figure tone-${toneOf(data.margin_of_safety)}`}>{formatPercent(data.margin_of_safety)}</dd>
-          <span className="kpi-note">{formatCurrency(data.base_fair_value, 2, currency)} base value</span>
+          <dd className="kpi-note">{formatCurrency(data.base_fair_value, 2, currency)} base value</dd>
         </div>
       </dl>
 

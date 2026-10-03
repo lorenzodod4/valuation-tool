@@ -37,6 +37,7 @@ The FMP free tier allows a few hundred calls per day across all users, so every 
 3. **Lean peers** — a peer costs 3 calls (profile + TTM ratios + TTM metrics); statements are fetched only if a ratio is missing.
 4. **Bounded retries** — one retry on network/5xx, key rotation on 429, never a loop.
 5. **Stale fallback** — if the provider is down, a recent cached copy is served and the report says so.
+6. **Cold-ticker budget** — each IP may open 12 uncached tickers per hour (`COLD_TICKERS_PER_HOUR`); cached tickers are unlimited.
 
 A first-time ticker costs about 25 calls (6 for the company, 1 peer list, ~3 per peer); repeat visits within the cache window cost none.
 

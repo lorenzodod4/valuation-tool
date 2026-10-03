@@ -82,18 +82,18 @@
   --ink: #101216;
   --ink-2: #3a3f48;
   --ink-3: #626873;
-  --ink-4: #8b919b;
+  --ink-4: #656b75;
 
   --signal: #2f55e4;          /* brand + primary series */
   --signal-ink: #2445c4;      /* signal used as text (AA on surface) */
   --signal-soft: rgba(47, 85, 228, 0.09);
   --signal-line: rgba(47, 85, 228, 0.32);
 
-  --pos: #0c7a52;
+  --pos: #0b734d;
   --pos-soft: rgba(12, 122, 82, 0.09);
   --neg: #b4352c;
   --neg-soft: rgba(180, 53, 44, 0.08);
-  --warn: #9a6206;
+  --warn: #8a5805;
   --warn-soft: rgba(154, 98, 6, 0.09);
 
   /* Categorical series (validated light set) */
@@ -134,7 +134,7 @@
     --ink: #eef0f3;
     --ink-2: #b9bec7;
     --ink-3: #868c97;
-    --ink-4: #5f6570;
+    --ink-4: #80868f;
 
     --signal: #5b7bf5;
     --signal-ink: #93a6ff;
@@ -183,7 +183,7 @@
   --ink: #eef0f3;
   --ink-2: #b9bec7;
   --ink-3: #868c97;
-  --ink-4: #5f6570;
+  --ink-4: #80868f;
 
   --signal: #5b7bf5;
   --signal-ink: #93a6ff;

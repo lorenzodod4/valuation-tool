@@ -100,9 +100,6 @@
   font-size: var(--text-xl);
   line-height: 1.2;
   color: var(--ink);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
 .summary-item-primary {
   background: linear-gradient(180deg, var(--signal-soft), transparent);
@@ -237,9 +234,11 @@
   margin-top: 6px;
   font-size: var(--text-xl);
   line-height: 1.15;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+}
+/* Financial figures are never truncated: they step down a size instead. */
+@media (max-width: 620px) {
+  .summary-item dd, .kpi dd, .implied strong { font-size: var(--text-lg); }
+  .summary-item-primary dd { font-size: var(--text-2xl); }
 }
 .kpi-note { display: block; margin-top: 4px; font-size: var(--text-xs); color: var(--ink-4); }
 .kpi-note .num, .kpi-note [class^="tone-"] { font-size: var(--text-xs); }
@@ -345,7 +344,7 @@
 .sens-axis { font-family: var(--font-mono); font-size: var(--text-2xs); color: var(--ink-3); letter-spacing: 0.02em; text-transform: none; }
 .sens-cell { padding: 10px 12px !important; }
 .sens-value { display: block; color: var(--ink); }
-.sens-delta { display: block; font-size: var(--text-2xs); color: var(--ink-3); }
+.sens-delta { display: block; font-size: var(--text-2xs); color: var(--ink-2); }
 .sens-cell.is-base { outline: 2px solid var(--ink); outline-offset: -2px; font-weight: 600; }
 .is-base-col, .is-base-row { color: var(--ink) !important; }
 .sens-legend {
@@ -536,6 +535,7 @@
   max-width: 640px;
   padding: clamp(24px, 5vw, 48px);
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: var(--space-3);
 }
 .error-icon { color: var(--ink-3); }
@@ -543,3 +543,17 @@
 .error-card p { color: var(--ink-2); }
 .error-actions:empty { display: none; }
 .error-search { margin-top: var(--space-6); padding-top: var(--space-6); border-top: 1px solid var(--line); }
+
+/* Notes are <dd> for valid definition lists; keep them small. */
+.summary-item dd.summary-note,
+.kpi dd.kpi-note {
+  font-family: var(--font-sans);
+  font-size: var(--text-xs);
+  line-height: var(--leading-body);
+  color: var(--ink-4);
+  white-space: normal;
+  overflow: visible;
+  letter-spacing: 0;
+  font-weight: 400;
+}
+.kpi dd.kpi-note { margin-top: 4px; }

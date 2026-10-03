@@ -570,3 +570,4 @@ main {
 @media (forced-colors: active) {
   .badge, .chip, .panel, .notice { border: 1px solid CanvasText; }
 }
+.data-table .row-emphasis .cell-sub { color: var(--ink-2); }

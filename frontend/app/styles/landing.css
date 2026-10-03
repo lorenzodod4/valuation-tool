@@ -440,7 +440,7 @@ input[type="range"]:focus-visible {
 .range-chart { margin: 0; }
 .range-grid {
   display: grid;
-  grid-template-columns: minmax(84px, 120px) minmax(0, 1fr) minmax(0, 176px);
+  grid-template-columns: minmax(84px, 120px) minmax(0, 1fr) minmax(176px, 200px);
   column-gap: var(--space-4);
 }
 .range-head,
@@ -483,6 +483,7 @@ input[type="range"]:focus-visible {
   color: var(--ink-3);
   border-top: 1px solid var(--line);
 }
+.range-values span { white-space: nowrap; }
 .range-values-base { color: var(--ink); font-weight: 500; }
 .range-track {
   position: relative;
@@ -570,7 +571,22 @@ input[type="range"]:focus-visible {
   border-radius: var(--radius-xs);
 }
 .range-marker-label b { color: var(--ink); font-weight: 600; }
+.range-tick:first-child { transform: none; }
+.range-tick.is-last { transform: translateX(-100%); }
 .range-empty { font-size: var(--text-sm); color: var(--ink-3); }
+.range-mobile-values { display: none; }
+@media (max-width: 620px) {
+  .range-mobile-values {
+    display: grid;
+    gap: 6px;
+    margin-top: var(--space-4);
+    font-size: var(--text-xs);
+  }
+  .range-mobile-values div { display: flex; justify-content: space-between; gap: var(--space-3); border-bottom: 1px dashed var(--line); padding-bottom: 6px; }
+  .range-mobile-values dt { color: var(--ink-2); font-weight: 550; }
+  .range-mobile-values dd { color: var(--ink-3); text-align: right; }
+  .range-mobile-values dd b { color: var(--ink); font-weight: 500; }
+}
 @media (max-width: 620px) {
   .range-grid { grid-template-columns: 76px minmax(0, 1fr); }
   .range-head-values, .range-values { display: none; }

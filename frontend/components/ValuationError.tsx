@@ -23,9 +23,12 @@ function describe(ticker: string, error: Error) {
     case "quota":
       return { icon: Clock, title: "Daily data budget reached", body: error.message, retry: false };
     case "rate_limited":
+      if (/new tickers/i.test(error.message)) {
+        return { icon: Clock, title: "New-ticker limit reached", body: error.message, retry: false };
+      }
       return { icon: Clock, title: "Too many requests", body: "Please wait a few seconds before trying again.", retry: true };
     case "network":
-      return { icon: WifiOff, title: "Can't reach the valuation server", body: error.message, retry: true };
+      return { icon: WifiOff, title: "Can't reach the valuation server", body: "Check your connection, or try again in a moment — the server may be waking up.", retry: true };
     default:
       return { icon: CircleSlash, title: `Couldn't analyse ${ticker} right now`, body: error.message, retry: true };
   }

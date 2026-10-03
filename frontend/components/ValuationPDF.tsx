@@ -531,6 +531,8 @@ function fmtPctSigned(n: number | null | undefined, decimals = 2): string {
 
 function fmtMultiple(n: number | null | undefined): string {
   if (n == null || !Number.isFinite(n)) return "—";
+  // Negative or zero multiples are not meaningful (excluded from medians).
+  if (n <= 0) return "NM";
   return `${n.toFixed(1)}x`;
 }
 
@@ -918,7 +920,9 @@ function CoverPage({
           label="P/E (TTM)"
           value={
             profile.pe_ratio != null && Number.isFinite(profile.pe_ratio)
-              ? `${profile.pe_ratio.toFixed(1)}x`
+              ? profile.pe_ratio > 0
+                ? `${profile.pe_ratio.toFixed(1)}x`
+                : "NM"
               : "—"
           }
         />

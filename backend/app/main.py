@@ -1,7 +1,11 @@
 import collections
+import json
 import logging
+import math
 import os
+import re
 import time
+from typing import Any
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -45,6 +49,48 @@ def _client_ip(request: Request) -> str:
     return request.client.host if request.client else "unknown"
 
 
+# Uncached ("cold") tickers are what spend provider quota (~25 calls each), so
+# they get their own, much smaller per-IP budget. Cached tickers are free.
+COLD_TICKERS_PER_HOUR = int(os.getenv("COLD_TICKERS_PER_HOUR", "12"))
+_TICKER_PATH = re.compile(r"^/api/valuation/([A-Za-z0-9][A-Za-z0-9.-]{0,9})/")
+
+
+def _is_cold(ticker: str) -> bool:
+    from app.config import CACHE_TTL_SECONDS
+    from app.services.data_fetcher import FinancialDataFetcher
+
+    cache = FinancialDataFetcher._cache
+    if cache is None:
+        return True
+    return cache.get(f"profile:{ticker.upper()}", ttl_seconds=CACHE_TTL_SECONDS) is None
+
+
+class ColdTickerBudget:
+    """Per-IP sliding-hour budget of distinct uncached tickers."""
+
+    def __init__(self, per_hour: int) -> None:
+        self._per_hour = per_hour
+        self._seen: dict[str, dict[str, float]] = {}
+
+    def allow(self, ip: str, ticker: str, now: float) -> tuple[bool, int]:
+        recent = {t: ts for t, ts in self._seen.get(ip, {}).items() if ts > now - 3600}
+        if ticker in recent:
+            # Same ticker within the hour (e.g. the page's parallel requests).
+            self._seen[ip] = recent
+            return True, 0
+        if len(recent) >= self._per_hour:
+            self._seen[ip] = recent
+            oldest = min(recent.values())
+            return False, int(oldest + 3600 - now) + 1
+        recent[ticker] = now
+        self._seen[ip] = recent
+        return True, 0
+
+    def prune(self, now: float) -> None:
+        for ip in [ip for ip, seen in self._seen.items() if all(ts <= now - 3600 for ts in seen.values())]:
+            del self._seen[ip]
+
+
 class RateLimitMiddleware(BaseHTTPMiddleware):
     """Sliding-window rate limiter keyed by client IP.
 
@@ -60,6 +106,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         self._window_seconds = window_seconds
         self._history: dict[str, collections.deque[float]] = {}
         self._calls_since_prune = 0
+        self._cold = ColdTickerBudget(COLD_TICKERS_PER_HOUR)
 
     async def dispatch(self, request: Request, call_next):
         # Skip rate limiting for non-valuation endpoints.
@@ -76,6 +123,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
             self._calls_since_prune = 0
             for ip in [ip for ip, d in self._history.items() if not d or d[-1] < window_start]:
                 del self._history[ip]
+            self._cold.prune(time.time())
 
         # Get or create the deque for this IP, dropping expired entries.
         deq = self._history.get(client_ip)
@@ -99,12 +147,64 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
             )
 
         deq.append(now)
+
+        match = _TICKER_PATH.match(request.url.path)
+        if match and COLD_TICKERS_PER_HOUR > 0:
+            # The target plus any custom peers: each uncached one spends quota.
+            candidates = [match.group(1).upper()] + [
+                p.strip().upper()
+                for p in re.split(r"[,\s]+", request.query_params.get("peers", ""))[:8]
+                if p.strip()
+            ]
+            for ticker in dict.fromkeys(candidates):
+                if not _is_cold(ticker):
+                    continue
+                allowed, retry_after = self._cold.allow(client_ip, ticker, time.time())
+                if not allowed:
+                    return JSONResponse(
+                        status_code=429,
+                        content={
+                            "detail": (
+                                "You have analysed many new tickers in the last hour. "
+                                "Previously analysed tickers remain available; new ones "
+                                "will be possible again shortly."
+                            )
+                        },
+                        headers={"Retry-After": str(max(retry_after, 1))},
+                    )
         return await call_next(request)
+
+
+def _finite(value: Any) -> Any:
+    """Replace NaN/±Infinity with None anywhere in a response payload."""
+    if isinstance(value, float) and not math.isfinite(value):
+        return None
+    if isinstance(value, dict):
+        return {k: _finite(v) for k, v in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_finite(v) for v in value]
+    return value
+
+
+class FiniteJSONResponse(JSONResponse):
+    """JSON responses never carry NaN/Infinity: a degenerate model output
+    becomes null (rendered as "—") instead of a 500 for the whole report."""
+
+    def render(self, content: Any) -> bytes:
+        try:
+            return json.dumps(content, allow_nan=False, separators=(",", ":")).encode("utf-8")
+        except ValueError:
+            logger.warning("Non-finite number in response payload replaced with null")
+            return json.dumps(_finite(content), allow_nan=False, separators=(",", ":")).encode("utf-8")
 
 
 def create_app() -> FastAPI:
     """Application factory. Enables dependency injection and testability."""
-    application = FastAPI(title="Valuation Tool API", version="0.1.0")
+    application = FastAPI(
+        title="Valuation Tool API",
+        version="0.2.0",
+        default_response_class=FiniteJSONResponse,
+    )
 
     # Rate limiter must be registered before other middleware so it runs first.
     application.add_middleware(

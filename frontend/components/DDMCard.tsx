@@ -32,24 +32,24 @@ export function DDMCard({ ddm, currency }: DDMCardProps) {
         <div className="kpi">
           <dt>Value per share</dt>
           <dd className="figure">{money(ddm.per_share_value)}</dd>
-          <span className="kpi-note">
+          <dd className="kpi-note">
             <span className={`tone-${toneOf(ddm.upside_pct)}`}>{formatPercent(ddm.upside_pct)}</span> vs market
-          </span>
+          </dd>
         </div>
         <div className="kpi">
           <dt>Latest dividend / share</dt>
           <dd className="figure">{money(ddm.latest_dps)}</dd>
-          <span className="kpi-note">Common dividends ÷ shares</span>
+          <dd className="kpi-note">Common dividends ÷ shares</dd>
         </div>
         <div className="kpi">
           <dt>Dividend yield</dt>
           <dd className="figure">{formatRate(ddm.dividend_yield)}</dd>
-          <span className="kpi-note">at market price</span>
+          <dd className="kpi-note">at market price</dd>
         </div>
         <div className="kpi">
           <dt>Terminal value share</dt>
           <dd className="figure">{formatRate(tvShare, 0)}</dd>
-          <span className="kpi-note">of value per share</span>
+          <dd className="kpi-note">of value per share</dd>
         </div>
       </dl>
 

@@ -138,8 +138,8 @@ export function RangeChart({ rows, marker, format: formatRaw = (n, d) => formatC
         <div className="range-axis">
           <span />
           <span className="range-axis-track">
-            {ticks.map((t) => (
-              <span key={t} className="range-tick num" style={{ left: `${pct(t)}%` }}>
+            {ticks.map((t, i) => (
+              <span key={t} className={`range-tick num${i === ticks.length - 1 ? " is-last" : ""}`} style={{ left: `${pct(t)}%` }}>
                 {formatTick(t)}
               </span>
             ))}
@@ -154,6 +154,20 @@ export function RangeChart({ rows, marker, format: formatRaw = (n, d) => formatC
           <span />
         </div>
       </div>
+      <dl className="range-mobile-values" aria-hidden="true">
+        {rows.map((r) => {
+          const hasRange = finite(r.low) && finite(r.high) && r.high > r.low;
+          return (
+            <div key={r.label}>
+              <dt>{r.label}</dt>
+              <dd className="num">
+                <b>{finite(r.base) ? format(r.base) : "n/a"}</b>
+                {hasRange ? ` · ${format(r.low as number)} – ${format(r.high as number)}` : ""}
+              </dd>
+            </div>
+          );
+        })}
+      </dl>
     </figure>
   );
 }

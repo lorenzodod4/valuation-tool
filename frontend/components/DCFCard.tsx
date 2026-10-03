@@ -45,24 +45,24 @@ export function DCFCard({ dcf, currency }: DCFCardProps) {
         <div className="kpi">
           <dt>Value per share</dt>
           <dd className={`figure${negative ? " tone-neg" : ""}`}>{formatCurrency(dcf.per_share_value, 2, currency)}</dd>
-          <span className="kpi-note">
+          <dd className="kpi-note">
             {negative ? "Negative equity value" : <><span className={`tone-${toneOf(dcf.upside_pct)}`}>{formatPercent(dcf.upside_pct)}</span> vs market</>}
-          </span>
+          </dd>
         </div>
         <div className="kpi">
           <dt>Enterprise value</dt>
           <dd className="figure">{money(dcf.enterprise_value)}</dd>
-          <span className="kpi-note">PV of FCFF + PV of TV</span>
+          <dd className="kpi-note">PV of FCFF + PV of TV</dd>
         </div>
         <div className="kpi">
           <dt>Equity value</dt>
           <dd className="figure">{money(dcf.equity_value)}</dd>
-          <span className="kpi-note">EV − net debt</span>
+          <dd className="kpi-note">EV − net debt</dd>
         </div>
         <div className="kpi">
           <dt>Terminal value share</dt>
           <dd className={`figure${tvShare != null && tvShare > 0.85 ? " tone-warn" : ""}`}>{formatRate(tvShare, 0)}</dd>
-          <span className="kpi-note">{tvShare != null && tvShare > 0.85 ? "High dependence on Y5+" : "of enterprise value"}</span>
+          <dd className="kpi-note">{tvShare != null && tvShare > 0.85 ? "High dependence on Y5+" : "of enterprise value"}</dd>
         </div>
       </dl>
 
