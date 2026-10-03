@@ -1,133 +1,11 @@
-import type { DCFResult, WACCBreakdown } from "@/types/valuation";
-import { TriangleAlert } from "lucide-react";
-import { BorderGlow } from "@/components/BorderGlow";
-import {
-  abbreviateNumber,
-  formatCurrency,
-  formatPercent,
-} from "@/lib/format";
-
-const DEFAULT_DEBT_PRETAX = 0.045;
-
-function pctFmt(n: number | null | undefined, decimals: number = 2): string {
-  if (n == null || !Number.isFinite(n)) return "—";
-  return `${(n * 100).toFixed(decimals)}%`;
-}
-
-function isWaccDataStale(dataAsOf: string | undefined | null): boolean {
-  if (!dataAsOf) return false;
-  const asOf = new Date(dataAsOf);
-  if (Number.isNaN(asOf.getTime())) return false;
-  const days = (Date.now() - asOf.getTime()) / (1000 * 60 * 60 * 24);
-  return days > 180;
-}
-
-interface WaccRow {
-  label: string;
-  value: string;
-  note?: string;
-  highlight?: boolean;
-  final?: boolean;
-}
-
-function WaccBreakdownView({ breakdown }: { breakdown: WACCBreakdown }) {
-  const stale = isWaccDataStale(breakdown.data_as_of);
-  // Heuristic: when the configured default surfaces, treat as a fallback.
-  const debtPretaxIsDefault =
-    Math.abs(breakdown.cost_of_debt_pretax - DEFAULT_DEBT_PRETAX) < 0.0001;
-
-  const rows: WaccRow[] = [
-    {
-      label: "Risk-free rate",
-      value: pctFmt(breakdown.risk_free_rate),
-      note: breakdown.rf_source,
-    },
-    {
-      label: "Equity risk premium",
-      value: pctFmt(breakdown.equity_risk_premium),
-      note: breakdown.erp_source,
-    },
-    {
-      label: "Beta (β)",
-      value: breakdown.beta.toFixed(3),
-      note: breakdown.beta_source,
-    },
-    {
-      label: "Cost of equity (Re)",
-      value: pctFmt(breakdown.cost_of_equity),
-      note: "Rf + β × ERP",
-      highlight: true,
-    },
-    {
-      label: "Cost of debt pretax",
-      value: pctFmt(breakdown.cost_of_debt_pretax),
-      note: debtPretaxIsDefault ? "default fallback" : "derived from financials",
-    },
-    {
-      label: "Tax rate",
-      value: pctFmt(breakdown.tax_rate),
-      note: "from latest income statement",
-    },
-    {
-      label: "Cost of debt after-tax (Rd × (1−t))",
-      value: pctFmt(breakdown.cost_of_debt_aftertax),
-      highlight: true,
-    },
-    {
-      label: "Equity weight (E/V)",
-      value: pctFmt(breakdown.weight_equity, 1),
-    },
-    {
-      label: "Debt weight (D/V)",
-      value: pctFmt(breakdown.weight_debt, 1),
-    },
-    {
-      label: "WACC",
-      value: pctFmt(breakdown.wacc),
-      final: true,
-    },
-  ];
-
-  return (
-    <div className="wacc-breakdown-section">
-      <div className="wacc-breakdown-title-row">
-        <h4 className="wacc-breakdown-title">WACC Breakdown</h4>
-        <span className="wacc-breakdown-source">
-          Model reference inputs · {breakdown.data_as_of}
-        </span>
-      </div>
-
-      <div className="wacc-rows">
-        {rows.map((row) => {
-          const cls = row.final
-            ? "wacc-row wacc-row-final"
-            : row.highlight
-              ? "wacc-row wacc-row-highlight"
-              : "wacc-row";
-          return (
-            <div key={row.label} className={cls}>
-              <div className="wacc-row-label">{row.label}</div>
-              <div className="wacc-row-value">{row.value}</div>
-              <div className="wacc-row-note">{row.note ?? ""}</div>
-            </div>
-          );
-        })}
-      </div>
-
-      {stale ? (
-        <div className="wacc-stale-warning">
-          WACC inputs may be stale (last updated {breakdown.data_as_of}).
-          Consider refreshing manually.
-        </div>
-      ) : (
-        <div className="wacc-footnote">Inputs as of {breakdown.data_as_of}</div>
-      )}
-    </div>
-  );
-}
+import type { DCFResult } from "@/types/valuation";
+import { ModelWarnings } from "@/components/ModelWarnings";
+import { WaccTable } from "@/components/WaccTable";
+import { abbreviateNumber, formatCurrency, formatPercent, formatRate, toneOf } from "@/lib/format";
 
 interface DCFCardProps {
   dcf: DCFResult;
+  currency?: string | null;
 }
 
 interface AssumptionsShape {
@@ -142,161 +20,132 @@ interface AssumptionsShape {
   revenue_growth_rates?: number[];
 }
 
-function pct(n: number | null | undefined, decimals: number = 2): string {
-  if (n == null || !Number.isFinite(n)) return "—";
-  return `${(n * 100).toFixed(decimals)}%`;
-}
+export function DCFCard({ dcf, currency }: DCFCardProps) {
+  const a = dcf.assumptions_used as AssumptionsShape;
+  const wacc = a.wacc ?? null;
+  const pvSum = dcf.projections.reduce((s, p) => s + p.pv_fcff, 0);
+  const tvShare = dcf.enterprise_value > 0 ? dcf.pv_terminal_value / dcf.enterprise_value : null;
+  const negative = dcf.per_share_value != null && dcf.per_share_value <= 0;
+  const money = (n: number | null | undefined, d = 2) => abbreviateNumber(n, currency, d);
 
-export function DCFCard({ dcf }: DCFCardProps) {
-  const assumptions = dcf.assumptions_used as AssumptionsShape;
-  const upside = dcf.upside_pct;
-  const upsideColor =
-    upside == null
-      ? "var(--text-primary)"
-      : upside >= 0
-        ? "var(--bull)"
-        : "var(--bear)";
-
-  const y1Growth = assumptions.revenue_growth_rates?.[0];
-
-  // Terminal Value Exposure: Critical metric for institutional model risk.
-  const tvExposure =
-    dcf.enterprise_value !== 0
-      ? dcf.pv_terminal_value / dcf.enterprise_value
-      : null;
-  const exposureTone =
-    tvExposure == null
-      ? "var(--text-secondary)"
-      : tvExposure > 0.85
-        ? "var(--bear)"
-        : tvExposure > 0.70
-          ? "var(--amber)"
-          : "var(--text-secondary)";
-
-  const pills: Array<{ label: string; value: string }> = [
-    { label: "WACC", value: pct(assumptions.wacc) },
-    { label: "Terminal Growth", value: pct(assumptions.terminal_growth_rate) },
-    { label: "Tax Rate", value: pct(assumptions.tax_rate) },
-    { label: "EBIT Margin", value: pct(assumptions.ebit_margin) },
-    { label: "D&A % of Revenue", value: pct(assumptions.da_pct_revenue) },
-    { label: "CapEx % of Revenue", value: pct(assumptions.capex_pct_revenue) },
-    { label: "Historical CAGR (3y)", value: pct(assumptions.historical_cagr_3y) },
-    { label: "Y1 Revenue Growth", value: pct(y1Growth) },
+  const assumptionList: Array<[string, string, string?]> = [
+    ["Revenue growth Y1 → Y5", (a.revenue_growth_rates ?? []).map((g) => formatRate(g, 1)).join(" → ") || "—", `3y historical CAGR ${formatRate(a.historical_cagr_3y, 1)}`],
+    ["EBIT margin", formatRate(a.ebit_margin, 1), "3-year average"],
+    ["Tax rate", formatRate(a.tax_rate, 1), "Effective, clamped 0–35%"],
+    ["D&A", formatRate(a.da_pct_revenue, 1), "% of revenue"],
+    ["CapEx", formatRate(a.capex_pct_revenue, 1), "% of revenue"],
+    ["Δ Working capital", formatRate(a.wc_change_pct_revenue, 1), "% of revenue"],
+    ["WACC", formatRate(a.wacc), dcf.wacc_breakdown ? "Derived — see build-up" : "User override"],
+    ["Terminal growth", formatRate(a.terminal_growth_rate), "Gordon growth after Y5"],
   ];
 
   return (
-    <div>
-      {dcf.sector_warning ? (
-        <div className="dcf-sector-warning" role="note">
-          <TriangleAlert
-            className="dcf-sector-warning-icon"
-            size={16}
-            strokeWidth={1.8}
-            aria-hidden="true"
-          />
-          <span>{dcf.sector_warning.message}</span>
+    <div className="model-card">
+      <dl className="kpi-row">
+        <div className="kpi">
+          <dt>Value per share</dt>
+          <dd className={`figure${negative ? " tone-neg" : ""}`}>{formatCurrency(dcf.per_share_value, 2, currency)}</dd>
+          <dd className="kpi-note">
+            {negative ? "Negative equity value" : <><span className={`tone-${toneOf(dcf.upside_pct)}`}>{formatPercent(dcf.upside_pct)}</span> vs market</>}
+          </dd>
         </div>
-      ) : null}
-      <div className="dcf-metrics">
-        <BorderGlow className="report-glow-card kpi-glow" fillOpacity={0.1} glowRadius={18}>
-          <div className="dcf-metric">
-            <div className="dcf-metric-label">Per Share Value</div>
-            <div className="dcf-metric-value">
-              {formatCurrency(dcf.per_share_value)}
-            </div>
-            <div className="dcf-metric-sub">DCF intrinsic</div>
-          </div>
-        </BorderGlow>
-        <BorderGlow className="report-glow-card kpi-glow" fillOpacity={0.1} glowRadius={18}>
-          <div className="dcf-metric">
-            <div className="dcf-metric-label">Market Price</div>
-            <div className="dcf-metric-value">
-              {formatCurrency(dcf.current_price)}
-            </div>
-            <div className="dcf-metric-sub">Current</div>
-          </div>
-        </BorderGlow>
-        <BorderGlow className="report-glow-card kpi-glow" fillOpacity={0.1} glowRadius={18}>
-          <div className="dcf-metric">
-            <div className="dcf-metric-label">Upside / Downside</div>
-            <div className="dcf-metric-value" style={{ color: upsideColor }}>
-              {formatPercent(upside)}
-            </div>
-            <div className="dcf-metric-sub">vs market price</div>
-          </div>
-        </BorderGlow>
-        <BorderGlow className="report-glow-card kpi-glow" fillOpacity={0.1} glowRadius={18}>
-          <div className="dcf-metric">
-            <div className="dcf-metric-label">Enterprise Value</div>
-            <div className="dcf-metric-value">
-              {abbreviateNumber(dcf.enterprise_value)}
-            </div>
-            <div className="dcf-metric-sub">Computed EV</div>
-          </div>
-        </BorderGlow>
-        <BorderGlow className="report-glow-card kpi-glow" fillOpacity={0.1} glowRadius={18}>
-          <div className="dcf-metric">
-            <div className="dcf-metric-label">TV Exposure</div>
-            <div className="dcf-metric-value" style={{ color: exposureTone }}>{pct(tvExposure, 1)}</div>
-            <div className="dcf-metric-sub">% of total EV</div>
-          </div>
-        </BorderGlow>
-      </div>
+        <div className="kpi">
+          <dt>Enterprise value</dt>
+          <dd className="figure">{money(dcf.enterprise_value)}</dd>
+          <dd className="kpi-note">PV of FCFF + PV of TV</dd>
+        </div>
+        <div className="kpi">
+          <dt>Equity value</dt>
+          <dd className="figure">{money(dcf.equity_value)}</dd>
+          <dd className="kpi-note">EV − net debt</dd>
+        </div>
+        <div className="kpi">
+          <dt>Terminal value share</dt>
+          <dd className={`figure${tvShare != null && tvShare > 0.85 ? " tone-warn" : ""}`}>{formatRate(tvShare, 0)}</dd>
+          <dd className="kpi-note">{tvShare != null && tvShare > 0.85 ? "High dependence on Y5+" : "of enterprise value"}</dd>
+        </div>
+      </dl>
 
-      <div className="dcf-table-wrap">
-        <table className="dcf-projections">
+      <div className="table-scroll">
+        <table className="data-table">
+          <caption className="sr-only">Five-year free cash flow projection</caption>
           <thead>
             <tr>
-              <th>Year</th>
-              <th>Revenue</th>
-              <th>EBIT</th>
-              <th>NOPAT</th>
-              <th>FCFF</th>
-              <th>PV(FCFF)</th>
+              <th scope="col">{currency ?? "USD"}</th>
+              {dcf.projections.map((p) => (
+                <th key={p.year} scope="col" className="num">Y{p.year}</th>
+              ))}
             </tr>
           </thead>
           <tbody>
-            {dcf.projections.map((p) => (
-              <tr key={p.year}>
-                <td>Y{p.year}</td>
-                <td>{abbreviateNumber(p.revenue)}</td>
-                <td>{abbreviateNumber(p.ebit)}</td>
-                <td>{abbreviateNumber(p.nopat)}</td>
-                <td>{abbreviateNumber(p.fcff)}</td>
-                <td>{abbreviateNumber(p.pv_fcff)}</td>
-              </tr>
-            ))}
+            <tr>
+              <th scope="row">Revenue</th>
+              {dcf.projections.map((p) => <td key={p.year} className="num">{money(p.revenue)}</td>)}
+            </tr>
+            <tr>
+              <th scope="row">Growth</th>
+              {dcf.projections.map((p, i) => (
+                <td key={p.year} className="num tone-muted">{formatRate(a.revenue_growth_rates?.[i], 1)}</td>
+              ))}
+            </tr>
+            <tr>
+              <th scope="row">EBIT</th>
+              {dcf.projections.map((p) => <td key={p.year} className="num">{money(p.ebit)}</td>)}
+            </tr>
+            <tr>
+              <th scope="row">NOPAT</th>
+              {dcf.projections.map((p) => <td key={p.year} className="num">{money(p.nopat)}</td>)}
+            </tr>
+            <tr>
+              <th scope="row">Free cash flow (FCFF)</th>
+              {dcf.projections.map((p) => <td key={p.year} className="num">{money(p.fcff)}</td>)}
+            </tr>
+            <tr>
+              <th scope="row">Discount factor</th>
+              {dcf.projections.map((p) => (
+                <td key={p.year} className="num tone-muted">
+                  {wacc != null ? (1 / (1 + wacc) ** p.year).toFixed(3) : "—"}
+                </td>
+              ))}
+            </tr>
+            <tr className="row-emphasis">
+              <th scope="row">Present value</th>
+              {dcf.projections.map((p) => <td key={p.year} className="num">{money(p.pv_fcff)}</td>)}
+            </tr>
           </tbody>
         </table>
       </div>
 
-      <div className="dcf-assumptions">
-        <div className="dcf-assumptions-title">Assumptions</div>
-        <div className="dcf-assumptions-grid">
-          {pills.map((p) => (
-            <BorderGlow key={p.label} className="report-glow-card assumption-pill-glow" fillOpacity={0.1} glowRadius={14}>
-              <div className="dcf-pill">
-                <div className="dcf-pill-label">{p.label}</div>
-                <div className="dcf-pill-value">{p.value}</div>
+      <div className="model-split">
+        <div>
+          <h3 className="subhead">From cash flow to value per share</h3>
+          <table className="bridge">
+            <tbody>
+              <tr><th scope="row">Σ PV of FCFF, Y1–Y5</th><td className="num">{money(pvSum)}</td></tr>
+              <tr><th scope="row">+ PV of terminal value</th><td className="num">{money(dcf.pv_terminal_value)}</td></tr>
+              <tr className="bridge-total"><th scope="row">= Enterprise value</th><td className="num">{money(dcf.enterprise_value)}</td></tr>
+              <tr><th scope="row">− Net debt</th><td className="num">{money(dcf.net_debt)}</td></tr>
+              <tr className="bridge-total"><th scope="row">= Equity value</th><td className="num">{money(dcf.equity_value)}</td></tr>
+              <tr><th scope="row">÷ Shares outstanding</th><td className="num">{dcf.shares_outstanding ? `${(dcf.shares_outstanding / 1e6).toLocaleString("en-US", { maximumFractionDigits: 1 })}M` : "—"}</td></tr>
+              <tr className="bridge-total bridge-final"><th scope="row">= Value per share</th><td className="num">{formatCurrency(dcf.per_share_value, 2, currency)}</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div>
+          <h3 className="subhead">Assumptions</h3>
+          <dl className="assumption-list">
+            {assumptionList.map(([label, value, note]) => (
+              <div key={label}>
+                <dt>{label}{note ? <small>{note}</small> : null}</dt>
+                <dd className="num">{value}</dd>
               </div>
-            </BorderGlow>
-          ))}
+            ))}
+          </dl>
         </div>
       </div>
 
-      {dcf.wacc_breakdown ? (
-        <WaccBreakdownView breakdown={dcf.wacc_breakdown} />
-      ) : null}
-
-      {dcf.warnings.length > 0 ? (
-        <BorderGlow className="report-glow-card warning-glow" fillOpacity={0.1}>
-          <div className="dcf-warnings">
-            {dcf.warnings.map((w, i) => (
-              <div key={i}>{w}</div>
-            ))}
-          </div>
-        </BorderGlow>
-      ) : null}
+      {dcf.wacc_breakdown ? <WaccTable breakdown={dcf.wacc_breakdown} currency={currency} /> : null}
+      <ModelWarnings warnings={dcf.warnings} />
     </div>
   );
 }

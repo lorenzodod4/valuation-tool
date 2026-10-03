@@ -1,0 +1,17 @@
+[
+  {
+    "symbol": "KSTR",
+    "price": 12.4,
+    "marketCap": 6100000000.0,
+    "beta": 1.1,
+    "companyName": "Kestrel AI (Synthetic)",
+    "currency": "USD",
+    "exchange": "NASDAQ",
+    "exchangeFullName": "NASDAQ Global Select",
+    "industry": "Software - Infrastructure",
+    "sector": "Technology",
+    "country": "US",
+    "description": "Fictional peer KSTR.",
+    "isEtf": false
+  }
+]

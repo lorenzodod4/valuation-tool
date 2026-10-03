@@ -531,6 +531,8 @@ function fmtPctSigned(n: number | null | undefined, decimals = 2): string {
 
 function fmtMultiple(n: number | null | undefined): string {
   if (n == null || !Number.isFinite(n)) return "—";
+  // Negative or zero multiples are not meaningful (excluded from medians).
+  if (n <= 0) return "NM";
   return `${n.toFixed(1)}x`;
 }
 
@@ -835,7 +837,7 @@ function CoverPage({
       color: COLORS.bull,
     });
   }
-  const pe = multiples.implied_valuations.pe_based as RangedImplied | null;
+  const pe = multiples?.implied_valuations.pe_based as RangedImplied | null;
   if (pe?.implied_per_share != null) {
     methods.push({
       label: "P/E",
@@ -845,7 +847,7 @@ function CoverPage({
       color: COLORS.accent,
     });
   }
-  const evEbitda = multiples.implied_valuations.ev_ebitda_based as
+  const evEbitda = multiples?.implied_valuations.ev_ebitda_based as
     | RangedImplied
     | null;
   if (evEbitda?.implied_per_share != null) {
@@ -857,7 +859,7 @@ function CoverPage({
       color: COLORS.cyan,
     });
   }
-  const evSales = multiples.implied_valuations.ev_sales_based as
+  const evSales = multiples?.implied_valuations.ev_sales_based as
     | RangedImplied
     | null;
   if (evSales?.implied_per_share != null) {
@@ -869,6 +871,13 @@ function CoverPage({
       color: COLORS.bear,
     });
   }
+
+  // The PDF track starts at zero, so non-positive implied values cannot be
+  // drawn honestly; they are listed as excluded instead of being distorted.
+  const excludedMethods = methods.filter((m) => !(m.base > 0)).map((m) => m.label);
+  const plottable = methods.filter((m) => m.base > 0);
+  methods.length = 0;
+  methods.push(...plottable);
 
   const currentPrice = valuationModel?.current_price ?? profile.price ?? null;
   // Max value is the upper bound of the bar track; include every method's
@@ -911,7 +920,9 @@ function CoverPage({
           label="P/E (TTM)"
           value={
             profile.pe_ratio != null && Number.isFinite(profile.pe_ratio)
-              ? `${profile.pe_ratio.toFixed(1)}x`
+              ? profile.pe_ratio > 0
+                ? `${profile.pe_ratio.toFixed(1)}x`
+                : "NM"
               : "—"
           }
         />
@@ -955,6 +966,12 @@ function CoverPage({
           ))
         )}
       </View>
+
+      {excludedMethods.length > 0 ? (
+        <Text style={styles.body}>
+          Not plotted (non-positive implied value): {excludedMethods.join(", ")}.
+        </Text>
+      ) : null}
 
       {dcf?.sector_warning ? (
         <View style={styles.warning}>
@@ -1275,6 +1292,7 @@ function PeersPage({
 }) {
   const { profile } = valuation;
   const activeMultiples = multiples ?? valuation.multiples;
+  if (!activeMultiples) return null;
   const target = activeMultiples.target_metrics;
   const peers = activeMultiples.peer_statistics.peers ?? [];
   const stats = activeMultiples.peer_statistics.statistics;

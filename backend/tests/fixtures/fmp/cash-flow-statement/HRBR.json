@@ -1,0 +1,72 @@
+[
+  {
+    "date": "2025-12-31",
+    "symbol": "HRBR",
+    "reportedCurrency": "USD",
+    "fiscalYear": "2025",
+    "period": "FY",
+    "capitalExpenditure": -168000000,
+    "changeInWorkingCapital": 0,
+    "depreciationAndAmortization": 224000000,
+    "freeCashFlow": 2744000000,
+    "commonDividendsPaid": -1080000000,
+    "netDividendsPaid": -1101600000,
+    "preferredDividendsPaid": -21600000
+  },
+  {
+    "date": "2024-12-31",
+    "symbol": "HRBR",
+    "reportedCurrency": "USD",
+    "fiscalYear": "2024",
+    "period": "FY",
+    "capitalExpenditure": -162000000,
+    "changeInWorkingCapital": 0,
+    "depreciationAndAmortization": 216000000,
+    "freeCashFlow": 2646000000,
+    "commonDividendsPaid": -1020000000,
+    "netDividendsPaid": -1040400000,
+    "preferredDividendsPaid": -20400000
+  },
+  {
+    "date": "2023-12-31",
+    "symbol": "HRBR",
+    "reportedCurrency": "USD",
+    "fiscalYear": "2023",
+    "period": "FY",
+    "capitalExpenditure": -151500000,
+    "changeInWorkingCapital": 0,
+    "depreciationAndAmortization": 202000000,
+    "freeCashFlow": 2474500000,
+    "commonDividendsPaid": -960000000,
+    "netDividendsPaid": -979200000,
+    "preferredDividendsPaid": -19200000
+  },
+  {
+    "date": "2022-12-31",
+    "symbol": "HRBR",
+    "reportedCurrency": "USD",
+    "fiscalYear": "2022",
+    "period": "FY",
+    "capitalExpenditure": -145500000,
+    "changeInWorkingCapital": 0,
+    "depreciationAndAmortization": 194000000,
+    "freeCashFlow": 2376500000,
+    "commonDividendsPaid": -920000000,
+    "netDividendsPaid": -938400000,
+    "preferredDividendsPaid": -18400000
+  },
+  {
+    "date": "2021-12-31",
+    "symbol": "HRBR",
+    "reportedCurrency": "USD",
+    "fiscalYear": "2021",
+    "period": "FY",
+    "capitalExpenditure": -138000000,
+    "changeInWorkingCapital": 0,
+    "depreciationAndAmortization": 184000000,
+    "freeCashFlow": 2254000000,
+    "commonDividendsPaid": -880000000,
+    "netDividendsPaid": -897600000,
+    "preferredDividendsPaid": -17600000
+  }
+]

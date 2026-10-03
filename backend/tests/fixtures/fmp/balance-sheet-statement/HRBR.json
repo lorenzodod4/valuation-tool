@@ -1,0 +1,57 @@
+[
+  {
+    "date": "2025-12-31",
+    "symbol": "HRBR",
+    "reportedCurrency": "USD",
+    "fiscalYear": "2025",
+    "period": "FY",
+    "totalDebt": 31000000000,
+    "cashAndCashEquivalents": 18000000000,
+    "totalStockholdersEquity": 26000000000,
+    "totalAssets": 75600000000
+  },
+  {
+    "date": "2024-12-31",
+    "symbol": "HRBR",
+    "reportedCurrency": "USD",
+    "fiscalYear": "2024",
+    "period": "FY",
+    "totalDebt": 31000000000,
+    "cashAndCashEquivalents": 18000000000,
+    "totalStockholdersEquity": 26000000000,
+    "totalAssets": 75600000000
+  },
+  {
+    "date": "2023-12-31",
+    "symbol": "HRBR",
+    "reportedCurrency": "USD",
+    "fiscalYear": "2023",
+    "period": "FY",
+    "totalDebt": 31000000000,
+    "cashAndCashEquivalents": 18000000000,
+    "totalStockholdersEquity": 26000000000,
+    "totalAssets": 75600000000
+  },
+  {
+    "date": "2022-12-31",
+    "symbol": "HRBR",
+    "reportedCurrency": "USD",
+    "fiscalYear": "2022",
+    "period": "FY",
+    "totalDebt": 31000000000,
+    "cashAndCashEquivalents": 18000000000,
+    "totalStockholdersEquity": 26000000000,
+    "totalAssets": 75600000000
+  },
+  {
+    "date": "2021-12-31",
+    "symbol": "HRBR",
+    "reportedCurrency": "USD",
+    "fiscalYear": "2021",
+    "period": "FY",
+    "totalDebt": 31000000000,
+    "cashAndCashEquivalents": 18000000000,
+    "totalStockholdersEquity": 26000000000,
+    "totalAssets": 75600000000
+  }
+]

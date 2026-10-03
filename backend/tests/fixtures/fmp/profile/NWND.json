@@ -1,0 +1,17 @@
+[
+  {
+    "symbol": "NWND",
+    "price": 142.5,
+    "marketCap": 48450000000,
+    "beta": 1.15,
+    "companyName": "Northwind Systems (Synthetic)",
+    "currency": "USD",
+    "exchange": "NASDAQ",
+    "exchangeFullName": "NASDAQ Global Select",
+    "industry": "Software - Application",
+    "sector": "Technology",
+    "country": "US",
+    "description": "Fictional enterprise software vendor used as a deterministic fixture. Not a real company; all figures are synthetic.",
+    "isEtf": false
+  }
+]

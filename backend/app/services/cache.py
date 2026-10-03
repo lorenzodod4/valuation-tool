@@ -7,20 +7,23 @@ import time
 from pathlib import Path
 from typing import Any
 
-from app.config import CACHE_TTL_SECONDS
+from app.config import CACHE_DB_PATH, CACHE_TTL_SECONDS
 
 
-# Resolves to backend/cache.db regardless of cwd:
-#   backend/app/services/cache.py  →  parent.parent.parent  →  backend/
-DEFAULT_DB_PATH = Path(__file__).resolve().parent.parent.parent / "cache.db"
+DEFAULT_DB_PATH = CACHE_DB_PATH
+
+# Rows older than this are deleted during housekeeping. Must exceed the
+# longest stale-fallback window so stale rows survive long enough to be useful.
+_HOUSEKEEPING_MAX_AGE_SECONDS = 8 * 24 * 3600
 
 
 class PersistentCache:
-    """Thread-safe SQLite cache with TTL-based read expiry.
+    """Thread-safe SQLite cache with per-read TTL.
 
-    Drop-in replacement for the previous in-memory `TTLCache`:
-        cache.get(key)  →  parsed JSON, or None on miss/expiry
-        cache.set(key, value)  →  upserts the row with current timestamp
+        cache.get(key)                    → parsed JSON, or None on miss/expiry
+        cache.get(key, ttl_seconds=86400) → same, with a caller-chosen TTL
+        cache.get_with_age(key)           → (value, created_at) ignoring TTL
+        cache.set(key, value)             → upserts the row with current timestamp
     """
 
     def __init__(
@@ -47,27 +50,30 @@ class PersistentCache:
             )
             self._conn.commit()
 
-    def get(self, key: str) -> Any:
-        cutoff = int(time.time()) - self._ttl
-        with self._lock:
-            cursor = self._conn.execute(
-                "SELECT response_json FROM fmp_cache "
-                "WHERE cache_key = ? AND created_at > ?",
-                (key, cutoff),
-            )
-            row = cursor.fetchone()
-
-        if row is None:
+    def get(self, key: str, ttl_seconds: int | None = None) -> Any:
+        value, created_at = self.get_with_age(key)
+        ttl = self._ttl if ttl_seconds is None else ttl_seconds
+        if created_at is None or created_at <= int(time.time()) - ttl:
             self._miss_count += 1
             # Occasional opportunistic housekeeping; cheap and bounded.
             if self._miss_count % 100 == 0:
                 self.clear_expired()
             return None
+        return value
 
+    def get_with_age(self, key: str) -> tuple[Any, int | None]:
+        """Return (value, created_at) regardless of TTL, or (None, None)."""
+        with self._lock:
+            row = self._conn.execute(
+                "SELECT response_json, created_at FROM fmp_cache WHERE cache_key = ?",
+                (key,),
+            ).fetchone()
+        if row is None:
+            return None, None
         try:
-            return json.loads(row[0])
+            return json.loads(row[0]), int(row[1])
         except (ValueError, TypeError):
-            return None
+            return None, None
 
     def set(self, key: str, value: Any) -> None:
         payload = json.dumps(value)
@@ -81,12 +87,17 @@ class PersistentCache:
             self._conn.commit()
 
     def clear_expired(self) -> None:
-        cutoff = int(time.time()) - self._ttl
+        cutoff = int(time.time()) - max(self._ttl, _HOUSEKEEPING_MAX_AGE_SECONDS)
         with self._lock:
             self._conn.execute(
                 "DELETE FROM fmp_cache WHERE created_at <= ?",
                 (cutoff,),
             )
+            self._conn.commit()
+
+    def clear(self) -> None:
+        with self._lock:
+            self._conn.execute("DELETE FROM fmp_cache")
             self._conn.commit()
 
     def close(self) -> None:

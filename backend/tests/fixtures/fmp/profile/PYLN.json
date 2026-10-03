@@ -1,0 +1,17 @@
+[
+  {
+    "symbol": "PYLN",
+    "price": 57.0,
+    "marketCap": 18000000000.0,
+    "beta": 1.1,
+    "companyName": "Pylon Networks (Synthetic)",
+    "currency": "USD",
+    "exchange": "NASDAQ",
+    "exchangeFullName": "NASDAQ Global Select",
+    "industry": "Software - Infrastructure",
+    "sector": "Technology",
+    "country": "US",
+    "description": "Fictional peer PYLN.",
+    "isEtf": false
+  }
+]

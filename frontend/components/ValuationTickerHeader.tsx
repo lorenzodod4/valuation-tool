@@ -1,69 +1,65 @@
 "use client";
 
 import Link from "next/link";
+import type { ReactNode } from "react";
+import { ArrowLeft } from "lucide-react";
 import type { CompanyProfile } from "@/types/valuation";
-import { abbreviateNumber, formatCurrency } from "@/lib/format";
+import { abbreviateNumber } from "@/lib/format";
 
 interface ValuationTickerHeaderProps {
   profile: CompanyProfile;
+  actions?: ReactNode;
 }
 
-export function ValuationTickerHeader({ profile }: ValuationTickerHeaderProps) {
+function asOfLabel(epochSeconds: number | null | undefined): string | null {
+  if (!epochSeconds) return null;
+  const d = new Date(epochSeconds * 1000);
+  if (Number.isNaN(d.getTime())) return null;
+  return d.toLocaleString("en-US", {
+    month: "short",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+export function ValuationTickerHeader({ profile, actions }: ValuationTickerHeaderProps) {
   const meta = [profile.sector, profile.industry, profile.country].filter(
     (item): item is string => Boolean(item),
   );
+  const asOf = asOfLabel(profile.data_as_of);
 
   return (
-    <>
+    <header className="report-header">
       <Link href="/" className="back-link">
-        ← Back to search
+        <ArrowLeft size={14} strokeWidth={1.8} aria-hidden="true" />
+        New analysis
       </Link>
-
-      <div className="ticker-header">
-        <div className="ticker-header-left">
-          <div className="ticker-id">
-            <span className="ticker-symbol">{profile.symbol}</span>
-            {profile.name ? (
-              <span className="ticker-name">{profile.name}</span>
-            ) : null}
+      <div className="report-header-main">
+        <div className="report-identity">
+          <div className="report-symbol-row">
+            <span className="report-symbol mono">{profile.symbol}</span>
+            {profile.exchange ? <span className="badge">{profile.exchange}</span> : null}
+            {profile.currency ? <span className="badge">{profile.currency}</span> : null}
+            {profile.served_stale ? <span className="badge badge-warn">Cached copy</span> : null}
           </div>
-          {meta.length > 0 ? (
-            <div className="ticker-meta">
-              {meta.map((item, i) => (
-                <span key={item}>
-                  {i > 0 ? <span className="ticker-meta-sep">·</span> : null}
-                  {i > 0 ? " " : ""}
-                  {item}
-                </span>
-              ))}
-            </div>
-          ) : null}
+          <h1 className="report-name">{profile.name ?? profile.symbol}</h1>
+          {meta.length > 0 ? <p className="report-meta">{meta.join(" · ")}</p> : null}
         </div>
-
-        <div className="ticker-header-right">
-          <div>
-            <div className="metric-label">CURRENT PRICE</div>
+        <div className="report-header-side">
+          <dl className="report-header-facts">
             <div>
-              <span className="price-value">
-                {profile.price != null ? formatCurrency(profile.price) : "—"}
-              </span>
-              {profile.currency ? (
-                <span className="price-currency">{profile.currency}</span>
-              ) : null}
+              <dt>Market cap</dt>
+              <dd className="num">{abbreviateNumber(profile.market_cap, profile.currency)}</dd>
             </div>
-          </div>
-
-          <div className="market-cap">
-            <div className="metric-label">MARKET CAP</div>
-            <div className="market-cap-value">
-              {abbreviateNumber(profile.market_cap)}
+            <div>
+              <dt>Data as of</dt>
+              <dd className="num">{asOf ?? "—"}</dd>
             </div>
-            <p className="data-refresh-note">
-              Provider data may be delayed
-            </p>
-          </div>
+          </dl>
+          {actions}
         </div>
       </div>
-    </>
+    </header>
   );
 }

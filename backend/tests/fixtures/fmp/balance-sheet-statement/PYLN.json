@@ -1,0 +1,57 @@
+[
+  {
+    "date": "2025-12-31",
+    "symbol": "PYLN",
+    "reportedCurrency": "USD",
+    "fiscalYear": "2025",
+    "period": "FY",
+    "totalDebt": 2000000000,
+    "cashAndCashEquivalents": 1400000000,
+    "totalStockholdersEquity": 8000000000,
+    "totalAssets": 11200000000
+  },
+  {
+    "date": "2024-12-31",
+    "symbol": "PYLN",
+    "reportedCurrency": "USD",
+    "fiscalYear": "2024",
+    "period": "FY",
+    "totalDebt": 2000000000,
+    "cashAndCashEquivalents": 1400000000,
+    "totalStockholdersEquity": 8000000000,
+    "totalAssets": 11200000000
+  },
+  {
+    "date": "2023-12-31",
+    "symbol": "PYLN",
+    "reportedCurrency": "USD",
+    "fiscalYear": "2023",
+    "period": "FY",
+    "totalDebt": 2000000000,
+    "cashAndCashEquivalents": 1400000000,
+    "totalStockholdersEquity": 8000000000,
+    "totalAssets": 11200000000
+  },
+  {
+    "date": "2022-12-31",
+    "symbol": "PYLN",
+    "reportedCurrency": "USD",
+    "fiscalYear": "2022",
+    "period": "FY",
+    "totalDebt": 2000000000,
+    "cashAndCashEquivalents": 1400000000,
+    "totalStockholdersEquity": 8000000000,
+    "totalAssets": 11200000000
+  },
+  {
+    "date": "2021-12-31",
+    "symbol": "PYLN",
+    "reportedCurrency": "USD",
+    "fiscalYear": "2021",
+    "period": "FY",
+    "totalDebt": 2000000000,
+    "cashAndCashEquivalents": 1400000000,
+    "totalStockholdersEquity": 8000000000,
+    "totalAssets": 11200000000
+  }
+]

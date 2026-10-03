@@ -41,15 +41,15 @@ export function PDFLinkInner({
         />
       }
       fileName={fileName}
-      className="export-pdf-button"
+      className="btn btn-secondary"
     >
       {({ loading }) =>
         loading ? (
-          "Generating PDF..."
+          "Preparing PDF…"
         ) : (
           <>
             <Download size={14} strokeWidth={1.8} aria-hidden="true" />
-            Export core PDF
+            Download PDF
           </>
         )
       }

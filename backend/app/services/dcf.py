@@ -167,6 +167,9 @@ class DCFValuator:
             "terminal_growth_rate": terminal_growth,
             "historical_cagr_3y": raw_cagr,
             "ebit_source_field": ebit_field,
+            # Date of the latest annual statement the projection starts from,
+            # so the UI can flag stale fundamentals truthfully.
+            "income_date": income[0].get("date") if income else None,
             "warnings": warnings,
         }
 

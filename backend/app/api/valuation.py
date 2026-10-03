@@ -1,6 +1,9 @@
 """FastAPI router for the valuation endpoints."""
 
+import logging
 import re
+from datetime import datetime, timedelta, timezone
+from typing import Callable, TypeVar
 
 from fastapi import APIRouter, HTTPException, Query
 
@@ -13,12 +16,21 @@ from app.models.schemas import (
     MultiplesResult,
     ReverseDCFResult,
 )
-from app.services.data_fetcher import FinancialDataFetcher
+from app.services.data_fetcher import (
+    FinancialDataFetcher,
+    FmpProviderError,
+    InvalidApiKeyError,
+    PremiumTickerError,
+    ProviderUnavailableError,
+    QuotaExhaustedError,
+    TickerNotFoundError,
+)
 from app.services.dcf import DCFValuator
 from app.services.ddm import DDMValuator
 from app.services.multiples import MultiplesValuator
 from app.services.wacc import compute_wacc, is_data_stale
 
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/valuation", tags=["valuation"])
 
@@ -29,6 +41,13 @@ _multiples = MultiplesValuator(_fetcher)
 
 SYMBOL_PATTERN = re.compile(r"^[A-Z0-9][A-Z0-9.-]{0,9}$")
 MAX_CUSTOM_PEERS = 8
+
+# Sensitivity grid: steps around the company's own base case, so the centre
+# cell always equals the headline DCF value.
+SENSITIVITY_WACC_STEPS = (-0.02, -0.01, 0.0, 0.01, 0.02)
+SENSITIVITY_TG_STEPS = (-0.01, -0.005, 0.0, 0.005, 0.01)
+
+T = TypeVar("T")
 
 
 def _normalize_symbol(symbol: str) -> str:
@@ -44,59 +63,74 @@ def _normalize_symbol(symbol: str) -> str:
     return normalized
 
 
+def _seconds_until_utc_midnight() -> int:
+    now = datetime.now(timezone.utc)
+    tomorrow = (now + timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0)
+    return max(60, int((tomorrow - now).total_seconds()))
+
+
 def _upstream_http_error(exc: Exception, ticker: str) -> HTTPException:
     """Translate fetcher exceptions into HTTP responses.
 
-    - PermissionError mentioning "premium" → 422 (user picked an unsupported ticker).
-    - Other PermissionError → 503 (our API key is bad — operator problem).
-    - RuntimeError mentioning "rate limit" → 429 (transient, retry later).
-    - Other RuntimeError → 503 (upstream issue).
+    Messages are written for end users and never echo raw provider bodies.
     """
-    if isinstance(exc, PermissionError):
-        msg = str(exc)
-        if "premium" in msg.lower() or "not supported" in msg.lower():
-            return HTTPException(
-                status_code=422,
-                detail=(
-                    "This ticker is not supported on the free tier. "
-                    "Try a US-listed equity like AAPL, MSFT, or JPM."
-                ),
-            )
+    if isinstance(exc, TickerNotFoundError):
+        return HTTPException(status_code=404, detail=f"Ticker {ticker} not found")
+    if isinstance(exc, PremiumTickerError) or (
+        isinstance(exc, PermissionError) and "premium" in str(exc).lower()
+    ):
+        return HTTPException(
+            status_code=422,
+            detail=(
+                "This ticker is not supported on the free data tier. "
+                "Try a US-listed equity like AAPL, MSFT, or JPM."
+            ),
+        )
+    if isinstance(exc, QuotaExhaustedError):
         return HTTPException(
             status_code=503,
-            detail="Upstream data provider authentication error",
+            detail=(
+                "Daily market-data quota reached. Previously analysed tickers "
+                "remain available from cache; new tickers can be analysed after "
+                "00:00 UTC."
+            ),
+            headers={"Retry-After": str(_seconds_until_utc_midnight())},
         )
-    if isinstance(exc, RuntimeError):
-        msg = str(exc)
-        if "rate limit" in msg.lower():
-            return HTTPException(
-                status_code=429,
-                detail="Upstream rate limit reached. Try again later.",
-            )
+    if isinstance(exc, (InvalidApiKeyError, PermissionError)):
+        logger.error("Upstream authentication failure: %s", type(exc).__name__)
         return HTTPException(
             status_code=503,
-            detail=f"Upstream data provider error: {msg}",
+            detail="Data provider authentication error. The operator has been notified in logs.",
         )
+    if isinstance(exc, (ProviderUnavailableError, FmpProviderError, RuntimeError)):
+        logger.warning("Upstream provider failure for %s: %s", ticker, exc)
+        return HTTPException(
+            status_code=502,
+            detail="The market-data provider is temporarily unavailable. Try again shortly.",
+            headers={"Retry-After": "30"},
+        )
+    logger.exception("Unexpected error for %s", ticker)
     return HTTPException(
         status_code=500,
-        detail=f"Failed to fetch data for {ticker}: {exc}",
+        detail=f"Unexpected error while analysing {ticker}.",
     )
+
+
+def _call_upstream(ticker: str, fn: Callable[[], T]) -> T:
+    try:
+        return fn()
+    except (HTTPException, ValueError):
+        # ValueError is a domain signal ("insufficient data") handled by callers.
+        raise
+    except Exception as exc:  # noqa: BLE001 — mapped to a typed HTTP error
+        raise _upstream_http_error(exc, ticker) from None
 
 
 def _fetch_all(ticker: str) -> dict:
     ticker = _normalize_symbol(ticker)
-    try:
-        result = _fetcher.get_all_for_ticker(ticker)
-    except (PermissionError, RuntimeError) as exc:
-        raise _upstream_http_error(exc, ticker)
-    except Exception as exc:
-        raise HTTPException(
-            status_code=500, detail=f"Failed to fetch data for {ticker}: {exc}"
-        )
+    result = _call_upstream(ticker, lambda: _fetcher.get_all_for_ticker(ticker))
     if result is None:
-        raise HTTPException(
-            status_code=404, detail=f"Ticker {ticker.upper()} not found"
-        )
+        raise HTTPException(status_code=404, detail=f"Ticker {ticker} not found")
     return result
 
 
@@ -123,19 +157,24 @@ def _parse_peers(peers: str | None) -> list[str] | None:
     return items or None
 
 
+def _require_dcf_sector(financials: dict, label: str) -> None:
+    sector = (financials.get("profile") or {}).get("sector")
+    if _ddm.should_use_ddm(sector):
+        raise HTTPException(
+            status_code=422,
+            detail=(
+                f"{label} is not applicable for this sector. "
+                "Financial institutions and REITs are valued with DDM, not DCF."
+            ),
+        )
+
+
 @router.get("/{ticker}/profile", response_model=CompanyProfile)
 def get_profile(ticker: str) -> dict:
     ticker = _normalize_symbol(ticker)
-    try:
-        profile = _fetcher.get_profile(ticker)
-    except (PermissionError, RuntimeError) as exc:
-        raise _upstream_http_error(exc, ticker)
-    except Exception as exc:
-        raise HTTPException(status_code=500, detail=f"Failed to fetch profile: {exc}")
+    profile = _call_upstream(ticker, lambda: _fetcher.get_profile(ticker))
     if profile is None:
-        raise HTTPException(
-            status_code=404, detail=f"Ticker {ticker.upper()} not found"
-        )
+        raise HTTPException(status_code=404, detail=f"Ticker {ticker} not found")
     return profile
 
 
@@ -178,15 +217,11 @@ def get_multiples(
     ticker = _normalize_symbol(ticker)
     custom_peers = _parse_peers(peers)
     try:
-        return _multiples.valuate_with_multiples(ticker, custom_peers)
+        return _call_upstream(
+            ticker, lambda: _multiples.valuate_with_multiples(ticker, custom_peers)
+        )
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc))
-    except (PermissionError, RuntimeError) as exc:
-        raise _upstream_http_error(exc, ticker)
-    except Exception as exc:
-        raise HTTPException(
-            status_code=500, detail=f"Multiples valuation failed: {exc}"
-        )
 
 
 @router.get("/{ticker}/full", response_model=FullValuation)
@@ -195,39 +230,43 @@ def get_full_valuation(ticker: str) -> dict:
     # MultiplesValuator's downstream call for the same target hits the cache,
     # not FMP — keeps quota usage to ~1 target + N peers per /full request.
     financials = _fetch_all(ticker)
+    ticker = _normalize_symbol(ticker)
     profile = financials["profile"]
-    sector = profile.get("sector")
-
-    # Determine whether to use DDM or DCF
-    use_ddm = _ddm.should_use_ddm(sector)
+    use_ddm = _ddm.should_use_ddm(profile.get("sector"))
 
     dcf_result = None
     ddm_result = None
+    notices: list[str] = []
 
+    # A model that cannot run (e.g. no positive revenue) is disclosed as a
+    # notice instead of failing the whole report — comparables may still work.
     if use_ddm:
-        # Use DDM for financial institutions
-        assumptions = _ddm.compute_assumptions_from_history(financials)
         try:
-            ddm_result = _ddm.run_ddm(financials, assumptions)
+            ddm_result = _ddm.run_ddm(
+                financials, _ddm.compute_assumptions_from_history(financials)
+            )
         except ValueError as exc:
-            raise HTTPException(status_code=400, detail=str(exc))
+            notices.append(f"DDM unavailable: {exc}")
     else:
-        # Use DCF for regular companies
-        assumptions = _dcf.compute_assumptions_from_history(financials)
         try:
-            dcf_result = _dcf.run_dcf(financials, assumptions)
+            dcf_result = _dcf.run_dcf(
+                financials, _dcf.compute_assumptions_from_history(financials)
+            )
         except ValueError as exc:
-            raise HTTPException(status_code=400, detail=str(exc))
+            notices.append(f"DCF unavailable: {exc}")
 
+    multiples_result = None
     try:
-        multiples_result = _multiples.valuate_with_multiples(ticker)
+        multiples_result = _call_upstream(
+            ticker, lambda: _multiples.valuate_with_multiples(ticker)
+        )
     except ValueError as exc:
-        raise HTTPException(status_code=404, detail=str(exc))
-    except (PermissionError, RuntimeError) as exc:
-        raise _upstream_http_error(exc, ticker)
-    except Exception as exc:
-        raise HTTPException(
-            status_code=500, detail=f"Multiples valuation failed: {exc}"
+        notices.append(f"Trading comparables unavailable: {exc}")
+
+    if profile.get("served_stale"):
+        notices.append(
+            "The market-data provider was unavailable; figures are served from "
+            "the most recent cached copy."
         )
 
     return {
@@ -236,12 +275,17 @@ def get_full_valuation(ticker: str) -> dict:
         "ddm": ddm_result,
         "multiples": multiples_result,
         "primary_model": "ddm" if use_ddm else "dcf",
+        "notices": notices,
     }
 
 
 @router.get("/{ticker}/historical-financials")
 def get_historical_financials(ticker: str) -> dict:
-    """Return 5 years of historical income items in chronological order."""
+    """Return up to 5 years of historical income items in chronological order.
+
+    Missing line items are returned as null — never as zero — so a chart can
+    show a gap instead of a fabricated value.
+    """
     bundle = _fetch_all(ticker)
     income = bundle.get("income_statement") or []
 
@@ -259,39 +303,36 @@ def get_historical_financials(ticker: str) -> dict:
     data = [
         {
             "year": int(item["year"]),
-            "revenue": item.get("revenue") or 0,
-            "ebitda": item.get("ebitda") or 0,
-            "net_income": item.get("net_income") or 0,
-            "operating_income": item.get("operating_income") or 0,
+            "revenue": item.get("revenue"),
+            "ebitda": item.get("ebitda"),
+            "net_income": item.get("net_income"),
+            "operating_income": item.get("operating_income"),
         }
         for item in sorted_income
     ]
 
-    return {"symbol": ticker.upper(), "historical": data}
+    return {
+        "symbol": ticker.upper(),
+        "currency": sorted_income[-1].get("currency"),
+        "historical": data,
+    }
 
 
 @router.get("/{ticker}/sensitivity")
 def get_sensitivity(ticker: str) -> dict:
-    """Compute DCF per-share value across a 5×5 WACC × terminal-growth grid.
-    
+    """Compute DCF per-share value across a 5×5 WACC × terminal-growth grid
+    centred on the company's own base-case assumptions.
+
     Returns 422 with a clear message if the ticker's sector uses DDM instead of DCF.
     """
     financials = _fetch_all(ticker)
-    profile = financials.get("profile") or {}
-    sector = profile.get("sector")
-    if _ddm.should_use_ddm(sector):
-        raise HTTPException(
-            status_code=422,
-            detail=(
-                "Sensitivity analysis is not applicable for this sector. "
-                "Financial institutions and REITs are valued with DDM, not DCF. "
-                "Use the /ddm endpoint instead."
-            ),
-        )
+    _require_dcf_sector(financials, "Sensitivity analysis")
     base_assumptions = _dcf.compute_assumptions_from_history(financials)
+    base_wacc = float(base_assumptions["wacc"])
+    base_tg = float(base_assumptions["terminal_growth_rate"])
 
-    wacc_values = [0.07, 0.08, 0.09, 0.10, 0.11]
-    terminal_growth_values = [0.015, 0.020, 0.025, 0.030, 0.035]
+    wacc_values = [base_wacc + step for step in SENSITIVITY_WACC_STEPS]
+    terminal_growth_values = [base_tg + step for step in SENSITIVITY_TG_STEPS]
 
     try:
         table = _dcf.sensitivity_table(
@@ -306,20 +347,19 @@ def get_sensitivity(ticker: str) -> dict:
     # sensitivity_table returns matrix[wacc_idx][tg_idx]; transpose to
     # grid[tg_idx][wacc_idx] so the frontend can render rows = terminal growth.
     matrix = table["matrix"]
-    n_tg = len(terminal_growth_values)
-    n_wacc = len(wacc_values)
     grid: list[list[float | None]] = [
-        [matrix[wi][ti] for wi in range(n_wacc)] for ti in range(n_tg)
+        [matrix[wi][ti] for wi in range(len(wacc_values))]
+        for ti in range(len(terminal_growth_values))
     ]
-
-    profile = financials.get("profile") or {}
 
     return {
         "symbol": ticker.upper(),
         "wacc_values": wacc_values,
         "terminal_growth_values": terminal_growth_values,
+        "base_wacc": base_wacc,
+        "base_terminal_growth": base_tg,
         "grid": grid,
-        "current_price": profile.get("price"),
+        "current_price": (financials.get("profile") or {}).get("price"),
     }
 
 
@@ -329,25 +369,16 @@ def get_reverse_dcf(
     target_price: float | None = Query(
         default=None,
         gt=0,
+        le=10_000_000,
         description="Target price for reverse DCF",
     ),
 ) -> dict:
     """Solve for the implied revenue growth rate that justifies a given price.
-    
+
     Returns 422 with a clear message if the ticker's sector uses DDM instead of DCF.
     """
     financials = _fetch_all(ticker)
-    profile = financials.get("profile") or {}
-    sector = profile.get("sector")
-    if _ddm.should_use_ddm(sector):
-        raise HTTPException(
-            status_code=422,
-            detail=(
-                "Reverse DCF is not applicable for this sector. "
-                "Financial institutions and REITs are valued with DDM, not DCF. "
-                "Use the /ddm endpoint instead."
-            ),
-        )
+    _require_dcf_sector(financials, "Reverse DCF")
     assumptions = _dcf.compute_assumptions_from_history(financials)
     try:
         return _dcf.reverse_dcf(financials, assumptions, target_price=target_price)
@@ -400,3 +431,4 @@ def get_ddm(ticker: str) -> dict:
         return _ddm.run_ddm(financials, assumptions)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
+

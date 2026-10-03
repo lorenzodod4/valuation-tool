@@ -1,0 +1,17 @@
+[
+  {
+    "symbol": "CRST",
+    "price": 41.2,
+    "marketCap": 22000000000.0,
+    "beta": 1.1,
+    "companyName": "Crestline Cloud Infrastructure & Distributed Ledger Holdings (Synthetic)",
+    "currency": "USD",
+    "exchange": "NASDAQ",
+    "exchangeFullName": "NASDAQ Global Select",
+    "industry": "Software - Infrastructure",
+    "sector": "Technology",
+    "country": "US",
+    "description": "Fictional peer CRST.",
+    "isEtf": false
+  }
+]

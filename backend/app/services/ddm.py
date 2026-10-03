@@ -90,6 +90,7 @@ class DDMValuator:
             "latest_dps": latest_dps,
             "payout_ratio": payout_ratio,
             "wacc_breakdown": wacc_result.get("breakdown"),
+            "income_date": income[0].get("date") if income else None,
             "warnings": warnings,
         }
 

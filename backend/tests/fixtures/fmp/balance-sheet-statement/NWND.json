@@ -1,0 +1,57 @@
+[
+  {
+    "date": "2025-12-31",
+    "symbol": "NWND",
+    "reportedCurrency": "USD",
+    "fiscalYear": "2025",
+    "period": "FY",
+    "totalDebt": 4200000000,
+    "cashAndCashEquivalents": 3100000000,
+    "totalStockholdersEquity": 14000000000,
+    "totalAssets": 20720000000
+  },
+  {
+    "date": "2024-12-31",
+    "symbol": "NWND",
+    "reportedCurrency": "USD",
+    "fiscalYear": "2024",
+    "period": "FY",
+    "totalDebt": 4200000000,
+    "cashAndCashEquivalents": 3100000000,
+    "totalStockholdersEquity": 14000000000,
+    "totalAssets": 20720000000
+  },
+  {
+    "date": "2023-12-31",
+    "symbol": "NWND",
+    "reportedCurrency": "USD",
+    "fiscalYear": "2023",
+    "period": "FY",
+    "totalDebt": 4200000000,
+    "cashAndCashEquivalents": 3100000000,
+    "totalStockholdersEquity": 14000000000,
+    "totalAssets": 20720000000
+  },
+  {
+    "date": "2022-12-31",
+    "symbol": "NWND",
+    "reportedCurrency": "USD",
+    "fiscalYear": "2022",
+    "period": "FY",
+    "totalDebt": 4200000000,
+    "cashAndCashEquivalents": 3100000000,
+    "totalStockholdersEquity": 14000000000,
+    "totalAssets": 20720000000
+  },
+  {
+    "date": "2021-12-31",
+    "symbol": "NWND",
+    "reportedCurrency": "USD",
+    "fiscalYear": "2021",
+    "period": "FY",
+    "totalDebt": 4200000000,
+    "cashAndCashEquivalents": 3100000000,
+    "totalStockholdersEquity": 14000000000,
+    "totalAssets": 20720000000
+  }
+]

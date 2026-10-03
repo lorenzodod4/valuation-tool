@@ -1,0 +1,136 @@
+/* ==========================================================================
+   Long-form pages: methodology, about
+   ========================================================================== */
+
+.doc { padding-top: clamp(40px, 7vw, 88px); }
+.doc-header {
+  display: grid;
+  gap: var(--space-5);
+  max-width: 880px;
+  padding-bottom: var(--space-10);
+  border-bottom: 1px solid var(--line);
+}
+.doc-title {
+  font-size: var(--text-3xl);
+  line-height: var(--leading-snug);
+  letter-spacing: var(--tracking-display);
+  font-weight: 500;
+  text-wrap: balance;
+}
+.doc-title .serif-accent { color: var(--signal-ink); }
+.doc-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3) var(--space-10);
+  margin-top: var(--space-2);
+}
+.doc-meta dt { font-size: var(--text-xs); color: var(--ink-3); }
+.doc-meta dd { font-size: var(--text-sm); color: var(--ink); }
+
+.doc-layout {
+  display: grid;
+  grid-template-columns: 220px minmax(0, 1fr);
+  gap: var(--space-16);
+  padding-top: var(--space-10);
+}
+.doc-toc {
+  position: sticky;
+  top: calc(var(--header-h) + 24px);
+  align-self: start;
+}
+.doc-toc ol { display: grid; gap: 2px; margin-top: var(--space-3); }
+.doc-toc a {
+  display: flex;
+  gap: var(--space-3);
+  padding: 6px 0;
+  font-size: var(--text-sm);
+  color: var(--ink-3);
+  transition: color var(--dur-micro) var(--ease-out);
+}
+.doc-toc a:hover { color: var(--ink); }
+.doc-toc .num { font-size: var(--text-xs); color: var(--ink-4); }
+@media (max-width: 900px) {
+  .doc-layout { grid-template-columns: minmax(0, 1fr); gap: var(--space-8); }
+  .doc-toc { position: static; }
+  .doc-toc ol { grid-template-columns: 1fr 1fr; }
+}
+
+.doc-body {
+  min-width: 0;
+  max-width: 760px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-12);
+}
+.doc-body section { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--space-4); scroll-margin-top: calc(var(--header-h) + 24px); }
+.doc-body h2 {
+  font-size: var(--text-xl);
+  font-weight: 550;
+  letter-spacing: var(--tracking-tight);
+}
+.doc-body h3 { font-size: var(--text-md); font-weight: 600; margin-top: var(--space-2); }
+.doc-body p, .doc-body li { color: var(--ink-2); }
+.doc-body strong { color: var(--ink); font-weight: 600; }
+.doc-body em { color: var(--ink); font-style: normal; font-weight: 500; }
+.doc-body a { color: var(--signal-ink); text-decoration: underline; text-underline-offset: 3px; }
+.doc-formula { margin: 0; }
+.doc-formula pre {
+  padding: var(--space-4) var(--space-5);
+  border-radius: var(--radius-md);
+  background: var(--surface-inset);
+  border: 1px solid var(--line);
+  color: var(--ink);
+  font-size: var(--text-sm);
+  line-height: 1.8;
+  overflow-x: auto;
+  white-space: pre;
+}
+.doc-formula figcaption { margin-top: var(--space-2); font-size: var(--text-xs); color: var(--ink-3); }
+.doc-table td { white-space: normal; min-width: 140px; }
+.doc-limitations ul { display: grid; gap: var(--space-3); list-style: none; }
+.doc-limitations li { padding-left: var(--space-5); position: relative; }
+.doc-limitations li::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0.7em;
+  width: 8px;
+  height: 1px;
+  background: var(--warn);
+}
+.doc-credit { font-size: var(--text-sm); color: var(--ink-3) !important; border-top: 1px solid var(--line); padding-top: var(--space-6); }
+
+/* About */
+.about-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr);
+  gap: var(--space-12);
+  padding-top: var(--space-10);
+}
+.about-copy { display: grid; gap: var(--space-4); max-width: var(--prose-max); color: var(--ink-2); font-size: var(--text-md); }
+.author-card { padding: var(--space-6); display: grid; gap: var(--space-4); align-self: start; }
+.author-avatar {
+  display: grid;
+  place-items: center;
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  background: var(--signal-soft);
+  color: var(--signal-ink);
+  font-family: var(--font-mono);
+  font-weight: 600;
+}
+.author-card p { font-size: var(--text-sm); }
+.author-links { display: flex; flex-wrap: wrap; gap: var(--space-2); }
+.principles {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-8);
+  margin-top: var(--space-16);
+  padding-top: var(--space-8);
+  border-top: 1px solid var(--line);
+}
+.principles li p:last-child { margin-top: var(--space-3); color: var(--ink-2); }
+@media (max-width: 860px) {
+  .about-grid, .principles { grid-template-columns: minmax(0, 1fr); }
+}

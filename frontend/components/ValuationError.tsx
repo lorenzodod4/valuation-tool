@@ -1,95 +1,65 @@
 "use client";
 
 import Link from "next/link";
+import { ArrowLeft, CircleSlash, Clock, RotateCcw, SearchX, WifiOff } from "lucide-react";
+import { ApiError } from "@/lib/api";
+import { SearchBar } from "@/components/SearchBar";
 
 interface ValuationErrorProps {
   ticker: string;
-  message: string;
-  /** Optional override for the chips shown below the message. */
-  suggestedTickers?: string[];
+  error: Error;
+  onRetry: () => void;
 }
 
-const PREMIUM_PATTERN = /not supported|premium|free tier/i;
-const DEFAULT_SUGGESTIONS = ["AAPL", "NVDA", "JPM", "TSLA", "MSFT"];
-
-function WarningIcon() {
-  return (
-    <svg
-      width={32}
-      height={32}
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={1.6}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-    >
-      <path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
-      <line x1={12} y1={9} x2={12} y2={13} />
-      <line x1={12} y1={17} x2={12.01} y2={17} />
-    </svg>
-  );
+function describe(ticker: string, error: Error) {
+  const kind = error instanceof ApiError ? error.kind : "server";
+  switch (kind) {
+    case "not_found":
+      return { icon: SearchX, title: `We couldn't find ${ticker}`, body: "Check the symbol — this tool covers US-listed equities on NYSE and NASDAQ.", retry: false };
+    case "unsupported":
+      return { icon: CircleSlash, title: `${ticker} isn't covered`, body: "The free data tier covers most US large- and mid-caps. Non-US listings and some recent IPOs are not available.", retry: false };
+    case "invalid":
+      return { icon: CircleSlash, title: "That doesn't look like a ticker", body: error.message, retry: false };
+    case "quota":
+      return { icon: Clock, title: "Daily data budget reached", body: error.message, retry: false };
+    case "rate_limited":
+      if (/new tickers/i.test(error.message)) {
+        return { icon: Clock, title: "New-ticker limit reached", body: error.message, retry: false };
+      }
+      return { icon: Clock, title: "Too many requests", body: "Please wait a few seconds before trying again.", retry: true };
+    case "network":
+      return { icon: WifiOff, title: "Can't reach the valuation server", body: "Check your connection, or try again in a moment — the server may be waking up.", retry: true };
+    default:
+      return { icon: CircleSlash, title: `Couldn't analyse ${ticker} right now`, body: error.message, retry: true };
+  }
 }
 
-export function ValuationError({
-  ticker,
-  message,
-  suggestedTickers,
-}: ValuationErrorProps) {
-  const isPremium = PREMIUM_PATTERN.test(message);
-
-  const title = isPremium
-    ? "Ticker not supported"
-    : `Could not load ${ticker.toUpperCase()}`;
-
-  const displayMessage = isPremium
-    ? "Free tier FMP does not cover this ticker. Try a US-listed equity on NYSE or NASDAQ."
-    : message;
-
-  // Show chips when the caller passed some, OR when it's a premium error
-  // (in which case we fall back to a curated default list).
-  const chips =
-    suggestedTickers && suggestedTickers.length > 0
-      ? suggestedTickers
-      : isPremium
-        ? DEFAULT_SUGGESTIONS
-        : null;
+export function ValuationError({ ticker, error, onRetry }: ValuationErrorProps) {
+  const d = describe(ticker, error);
+  const Icon = d.icon;
+  const retryAfter = error instanceof ApiError ? error.retryAfterSeconds : null;
 
   return (
-    <div className="error-page">
-      <span className="error-icon">
-        <WarningIcon />
-      </span>
-      <h1 className="error-title">{title}</h1>
-      <p className="error-message">{displayMessage}</p>
-
-      {chips ? (
-        <div className="error-suggestions">
-          <span className="error-suggestions-label">TRY</span>
-          {chips.map((t) => (
-            <Link
-              key={t}
-              href={`/valuation/${t}`}
-              className="ticker-chip"
-            >
-              {t}
-            </Link>
-          ))}
+    <div className="container error-state">
+      <Link href="/" className="back-link">
+        <ArrowLeft size={14} strokeWidth={1.8} aria-hidden="true" />
+        New analysis
+      </Link>
+      <div className="error-card panel" role="alert">
+        <Icon size={22} strokeWidth={1.6} aria-hidden="true" className="error-icon" />
+        <h1>{d.title}</h1>
+        <p>{d.body}</p>
+        {retryAfter && d.retry ? <p className="tone-muted">Suggested wait: about {Math.ceil(retryAfter)} seconds.</p> : null}
+        <div className="error-actions">
+          {d.retry ? (
+            <button type="button" className="btn btn-primary" onClick={onRetry}>
+              <RotateCcw size={14} strokeWidth={1.8} aria-hidden="true" /> Try again
+            </button>
+          ) : null}
         </div>
-      ) : null}
-
-      <div className="error-actions">
-        <Link href="/" className="btn-primary">
-          Try a different ticker
-        </Link>
-        <button
-          type="button"
-          className="btn-secondary"
-          onClick={() => window.location.reload()}
-        >
-          Retry
-        </button>
+        <div className="error-search">
+          <SearchBar label="Try another ticker" />
+        </div>
       </div>
     </div>
   );

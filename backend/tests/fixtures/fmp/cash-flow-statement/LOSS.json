@@ -1,0 +1,57 @@
+[
+  {
+    "date": "2025-12-31",
+    "symbol": "LOSS",
+    "reportedCurrency": "USD",
+    "fiscalYear": "2025",
+    "period": "FY",
+    "capitalExpenditure": -99000000,
+    "changeInWorkingCapital": -33000000,
+    "depreciationAndAmortization": 66000000,
+    "freeCashFlow": -231000000
+  },
+  {
+    "date": "2024-12-31",
+    "symbol": "LOSS",
+    "reportedCurrency": "USD",
+    "fiscalYear": "2024",
+    "period": "FY",
+    "capitalExpenditure": -73800000,
+    "changeInWorkingCapital": -24600000,
+    "depreciationAndAmortization": 49200000,
+    "freeCashFlow": -172200000
+  },
+  {
+    "date": "2023-12-31",
+    "symbol": "LOSS",
+    "reportedCurrency": "USD",
+    "fiscalYear": "2023",
+    "period": "FY",
+    "capitalExpenditure": -54000000,
+    "changeInWorkingCapital": -18000000,
+    "depreciationAndAmortization": 36000000,
+    "freeCashFlow": -126000000
+  },
+  {
+    "date": "2022-12-31",
+    "symbol": "LOSS",
+    "reportedCurrency": "USD",
+    "fiscalYear": "2022",
+    "period": "FY",
+    "capitalExpenditure": -36900000,
+    "changeInWorkingCapital": -12300000,
+    "depreciationAndAmortization": 24600000,
+    "freeCashFlow": -86100000
+  },
+  {
+    "date": "2021-12-31",
+    "symbol": "LOSS",
+    "reportedCurrency": "USD",
+    "fiscalYear": "2021",
+    "period": "FY",
+    "capitalExpenditure": -27000000,
+    "changeInWorkingCapital": -9000000,
+    "depreciationAndAmortization": 18000000,
+    "freeCashFlow": -63000000
+  }
+]

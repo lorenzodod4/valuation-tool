@@ -1,93 +1,49 @@
 "use client";
 
-import {
-  createContext,
-  useCallback,
-  useContext,
-  useEffect,
-  useState,
-  type ReactNode,
-} from "react";
+import { useCallback, useSyncExternalStore } from "react";
 
 export type Theme = "dark" | "light";
 
-interface ThemeContextValue {
-  theme: Theme;
-  setTheme: (theme: Theme) => void;
-  toggleTheme: () => void;
+const STORAGE_KEY = "theme";
+const DARK_QUERY = "(prefers-color-scheme: dark)";
+
+function readTheme(): Theme {
+  const attr = document.documentElement.getAttribute("data-theme");
+  if (attr === "dark" || attr === "light") return attr;
+  return window.matchMedia(DARK_QUERY).matches ? "dark" : "light";
 }
 
-const ThemeContext = createContext<ThemeContextValue | null>(null);
-
-function applyTheme(theme: Theme): void {
-  const root = document.documentElement;
-  root.setAttribute("data-theme", theme);
-  root.classList.toggle("dark", theme === "dark");
+function subscribe(onChange: () => void): () => void {
+  const observer = new MutationObserver(onChange);
+  observer.observe(document.documentElement, {
+    attributes: true,
+    attributeFilter: ["data-theme"],
+  });
+  const media = window.matchMedia(DARK_QUERY);
+  media.addEventListener("change", onChange);
+  return () => {
+    observer.disconnect();
+    media.removeEventListener("change", onChange);
+  };
 }
 
-function readInitialTheme(): Theme {
-  if (typeof window === "undefined") return "light";
-  const domTheme = document.documentElement.getAttribute("data-theme");
-  if (domTheme === "dark" || domTheme === "light") return domTheme;
-  try {
-    const stored = window.localStorage.getItem("theme");
-    if (stored === "dark" || stored === "light") return stored;
-  } catch {
-    // localStorage may be unavailable
-  }
-  if (window.matchMedia?.("(prefers-color-scheme: dark)").matches) return "dark";
-  return "light";
-}
-
-export function ThemeProvider({ children }: { children: ReactNode }) {
-  const [theme, setThemeState] = useState<Theme>(() => readInitialTheme());
-
-  useEffect(() => {
-    const initial = readInitialTheme();
-    applyTheme(initial);
-    if (initial !== theme) {
-      const frame = window.requestAnimationFrame(() => {
-        setThemeState(initial);
-      });
-      return () => window.cancelAnimationFrame(frame);
-    }
-    return undefined;
-  }, [theme]);
-
-  const setTheme = useCallback((next: Theme) => {
-    setThemeState(next);
-    applyTheme(next);
-    try {
-      window.localStorage.setItem("theme", next);
-    } catch {
-      // ignore
-    }
-  }, []);
+/**
+ * The resolved theme, read from the DOM (set pre-paint by the bootstrap script
+ * in app/layout.tsx). The server snapshot is a fixed value, so hydration never
+ * mismatches; anything theme-dependent in markup is chosen in CSS instead.
+ */
+export function useTheme(): { theme: Theme; toggleTheme: () => void } {
+  const theme = useSyncExternalStore(subscribe, readTheme, () => "dark" as Theme);
 
   const toggleTheme = useCallback(() => {
-    setThemeState((prev) => {
-      const next: Theme = prev === "dark" ? "light" : "dark";
-      applyTheme(next);
-      try {
-        window.localStorage.setItem("theme", next);
-      } catch {
-        // ignore
-      }
-      return next;
-    });
+    const next: Theme = readTheme() === "dark" ? "light" : "dark";
+    document.documentElement.setAttribute("data-theme", next);
+    try {
+      window.localStorage.setItem(STORAGE_KEY, next);
+    } catch {
+      // Storage may be unavailable (private mode); the choice still applies.
+    }
   }, []);
 
-  return (
-    <ThemeContext.Provider value={{ theme, setTheme, toggleTheme }}>
-      {children}
-    </ThemeContext.Provider>
-  );
-}
-
-export function useTheme(): ThemeContextValue {
-  const ctx = useContext(ThemeContext);
-  if (!ctx) {
-    throw new Error("useTheme must be used inside a ThemeProvider");
-  }
-  return ctx;
+  return { theme, toggleTheme };
 }

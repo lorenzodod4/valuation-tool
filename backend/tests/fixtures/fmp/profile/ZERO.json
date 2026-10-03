@@ -1,0 +1,17 @@
+[
+  {
+    "symbol": "ZERO",
+    "price": 4.1,
+    "marketCap": 410000000,
+    "beta": 1.4,
+    "companyName": "Seedline Bio (Synthetic)",
+    "currency": "USD",
+    "exchange": "NASDAQ",
+    "exchangeFullName": "NASDAQ Global Select",
+    "industry": "Biotechnology",
+    "sector": "Healthcare",
+    "country": "US",
+    "description": "Fictional pre-revenue biotech.",
+    "isEtf": false
+  }
+]

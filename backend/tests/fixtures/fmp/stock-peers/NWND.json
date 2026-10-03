@@ -1,0 +1,44 @@
+[
+  {
+    "symbol": "ORBT",
+    "companyName": "Orbital Data (Synthetic)",
+    "price": 88.1,
+    "mktCap": 61000000000.0
+  },
+  {
+    "symbol": "CRST",
+    "companyName": "Crestline Cloud",
+    "price": 41.2,
+    "mktCap": 22000000000.0
+  },
+  {
+    "symbol": "LMNA",
+    "companyName": "Lumina Analytics",
+    "price": 210.0,
+    "mktCap": 95000000000.0
+  },
+  {
+    "symbol": "KSTR",
+    "companyName": "Kestrel AI",
+    "price": 12.4,
+    "mktCap": 6100000000.0
+  },
+  {
+    "symbol": "PYLN",
+    "companyName": "Pylon Networks",
+    "price": 57.0,
+    "mktCap": 18000000000.0
+  },
+  {
+    "symbol": "TINY",
+    "companyName": "Tiny Micro",
+    "price": 1.1,
+    "mktCap": 90000000.0
+  },
+  {
+    "symbol": "NWND",
+    "companyName": "Northwind (self echo)",
+    "price": 142.5,
+    "mktCap": 48000000000.0
+  }
+]

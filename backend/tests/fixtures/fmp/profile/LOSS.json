@@ -1,0 +1,17 @@
+[
+  {
+    "symbol": "LOSS",
+    "price": 9.75,
+    "marketCap": 2925000000,
+    "beta": 1.8,
+    "companyName": "Ember Robotics (Synthetic)",
+    "currency": "USD",
+    "exchange": "NASDAQ",
+    "exchangeFullName": "NASDAQ Global Select",
+    "industry": "Specialty Industrial Machinery",
+    "sector": "Industrials",
+    "country": "US",
+    "description": "Fictional loss-making robotics company.",
+    "isEtf": false
+  }
+]

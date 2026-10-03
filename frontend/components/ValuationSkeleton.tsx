@@ -1,87 +1,49 @@
 "use client";
 
-import Link from "next/link";
 import { useEffect, useState } from "react";
 
-interface ValuationSkeletonProps {
-  ticker: string;
-}
-
-const LOADING_MESSAGES = [
-  "Fetching company profile…",
-  "Loading financial statements…",
-  "Selecting valuation method…",
-  "Computing valuation model…",
-  "Solving reverse DCF…",
-  "Comparing with peers…",
-  "Building football field…",
+const STEPS = [
+  "Fetching profile and quote",
+  "Loading five years of statements",
+  "Deriving assumptions and WACC",
+  "Running valuation models",
+  "Benchmarking against peers",
 ];
-const MESSAGE_INTERVAL_MS = 2500;
 
-function LoadingProgress() {
-  const [index, setIndex] = useState(0);
+export function ValuationSkeleton({ ticker }: { ticker: string }) {
+  const [step, setStep] = useState(0);
 
   useEffect(() => {
-    // Walk through the message list and stop at the last one — the real data
-    // usually arrives before we exhaust it, but if it doesn't, "building
-    // football field…" is a reasonable terminal state to dwell on.
-    const timer = setInterval(() => {
-      setIndex((prev) =>
-        prev < LOADING_MESSAGES.length - 1 ? prev + 1 : prev,
-      );
-    }, MESSAGE_INTERVAL_MS);
-    return () => clearInterval(timer);
+    const id = window.setInterval(() => setStep((s) => Math.min(s + 1, STEPS.length - 1)), 1800);
+    return () => window.clearInterval(id);
   }, []);
 
   return (
-    <div className="loading-progress" aria-live="polite">
-      <span key={index} className="loading-progress-text">
-        {LOADING_MESSAGES[index]}
-      </span>
+    <div className="container report-loading" aria-busy="true">
+      <div className="report-loading-head">
+        <span className="report-symbol mono">{ticker}</span>
+        <p className="report-loading-status" role="status" aria-live="polite">
+          {STEPS[step]}…
+        </p>
+        <ol className="report-loading-steps" aria-hidden="true">
+          {STEPS.map((s, i) => (
+            <li key={s} data-state={i < step ? "done" : i === step ? "active" : "todo"} />
+          ))}
+        </ol>
+        <p className="tone-muted report-loading-hint">
+          First analysis of a ticker can take a few seconds; repeat visits are served from cache.
+        </p>
+      </div>
+      <div className="summary-strip">
+        {Array.from({ length: 5 }, (_, i) => (
+          <div key={i} className="summary-item">
+            <div className="skeleton" style={{ height: 12, width: "50%" }} />
+            <div className="skeleton" style={{ height: 30, width: "80%", marginTop: 12 }} />
+          </div>
+        ))}
+      </div>
+      <div className="skeleton" style={{ height: 260, marginTop: 48, borderRadius: 14 }} />
+      <div className="skeleton" style={{ height: 380, marginTop: 24, borderRadius: 14 }} />
     </div>
-  );
-}
-
-export function ValuationSkeleton({ ticker }: ValuationSkeletonProps) {
-  return (
-    <>
-      <Link href="/" className="back-link">
-        ← Back to search
-      </Link>
-
-      <div className="loading-indicator">LOADING {ticker.toUpperCase()}…</div>
-
-      <LoadingProgress />
-
-      <div className="ticker-header">
-        <div className="ticker-header-left">
-          <div className="skeleton-bar" style={{ width: 200, height: 40 }} />
-          <div
-            className="skeleton-bar"
-            style={{ width: 280, height: 20, marginTop: 12 }}
-          />
-          <div
-            className="skeleton-bar"
-            style={{ width: 220, height: 12, marginTop: 12 }}
-          />
-        </div>
-        <div className="ticker-header-right">
-          <div className="skeleton-bar" style={{ width: 140, height: 32 }} />
-          <div
-            className="skeleton-bar"
-            style={{ width: 100, height: 14, marginTop: 16 }}
-          />
-        </div>
-      </div>
-
-      <div className="valuation-sections">
-        <div className="skeleton-card" />
-        <div className="skeleton-card" />
-        <div className="skeleton-card" />
-        <div className="skeleton-card skeleton-card-chart" />
-        <div className="skeleton-card skeleton-card-grid" />
-        <div className="skeleton-card" />
-      </div>
-    </>
   );
 }

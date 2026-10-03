@@ -1,181 +1,150 @@
 "use client";
 
-import type { ReactNode } from "react";
-import {
-  Area,
-  AreaChart,
-  CartesianGrid,
-  Legend,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
-} from "recharts";
-import { abbreviateNumber, formatCurrency } from "@/lib/format";
-import { useThemeColors } from "@/lib/useThemeColors";
+import { useEffect, useRef, useState } from "react";
 import type { HistoricalFinancials } from "@/types/valuation";
+import { abbreviateNumber } from "@/lib/format";
+
+type Row = HistoricalFinancials["historical"][number];
 
 interface HistoricalChartProps {
-  data: HistoricalFinancials["historical"];
+  data: Row[];
+  currency?: string | null;
 }
 
-export function HistoricalChart({ data }: HistoricalChartProps) {
-  const colors = useThemeColors();
+const SERIES = [
+  { key: "revenue", label: "Revenue", color: "var(--series-1)" },
+  { key: "ebitda", label: "EBITDA", color: "var(--series-2)" },
+  { key: "net_income", label: "Net income", color: "var(--series-3)" },
+] as const;
 
-  if (!data || data.length === 0) {
-    return (
-      <div className="historical-empty">
-        Historical data unavailable for this ticker.
-      </div>
-    );
+const H = 280;
+const M = { top: 16, right: 8, bottom: 28, left: 64 };
+
+function niceMax(v: number): number {
+  if (v <= 0) return 0;
+  const pow = 10 ** Math.floor(Math.log10(v));
+  const n = v / pow;
+  return (n <= 1 ? 1 : n <= 2 ? 2 : n <= 2.5 ? 2.5 : n <= 5 ? 5 : 10) * pow;
+}
+
+/** Grouped bars: one group per fiscal year. Missing values are drawn as gaps. */
+export function HistoricalChart({ data, currency }: HistoricalChartProps) {
+  const wrapRef = useRef<HTMLDivElement>(null);
+  const [width, setWidth] = useState(720);
+  const [hover, setHover] = useState<number | null>(null);
+
+  useEffect(() => {
+    const el = wrapRef.current;
+    if (!el || typeof ResizeObserver === "undefined") return;
+    const ro = new ResizeObserver(([e]) => setWidth(Math.max(280, e.contentRect.width)));
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
+  if (data.length === 0) {
+    return <p className="range-empty">No historical statements available.</p>;
   }
 
-  const limitedHistory = data.length < 3;
-
-  // Recharts v3's TooltipContentProps generics don't play nicely with hand-rolled
-  // payload shapes — using a loose signature here is the pragmatic escape.
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const renderTooltip = (props: any): ReactNode => {
-    if (!props?.active || !props?.payload || props.payload.length === 0) {
-      return null;
-    }
-    interface PayloadItem {
-      dataKey?: string | number;
-      name?: string | number;
-      value?: unknown;
-      color?: string;
-    }
-    const items = props.payload as PayloadItem[];
-    const label = props.label;
-    return (
-      <div className="ff-tooltip">
-        <div className="ff-tooltip-label">FY {String(label ?? "")}</div>
-        {items.map((p, i) => {
-          const numericValue = typeof p.value === "number" ? p.value : null;
-          const key =
-            typeof p.dataKey === "string" || typeof p.dataKey === "number"
-              ? String(p.dataKey)
-              : String(i);
-          return (
-            <div
-              key={key}
-              style={{
-                color: p.color,
-                marginTop: 4,
-                fontSize: 12,
-                fontFamily:
-                  "var(--font-geist-mono), ui-monospace, SFMono-Regular, Menlo, monospace",
-              }}
-            >
-              {String(p.name ?? "")}:{" "}
-              {numericValue != null ? formatCurrency(numericValue) : "—"}
-            </div>
-          );
-        })}
-      </div>
-    );
-  };
+  const values = data.flatMap((r) => SERIES.map((s) => r[s.key])).filter((v): v is number => v != null && Number.isFinite(v));
+  const yMax = niceMax(Math.max(0, ...values)) || 1;
+  const rawMin = Math.min(0, ...values);
+  const yMin = rawMin < 0 ? -niceMax(-rawMin) : 0;
+  const plotW = width - M.left - M.right;
+  const plotH = H - M.top - M.bottom;
+  const y = (v: number) => M.top + ((yMax - v) / (yMax - yMin)) * plotH;
+  const groupW = plotW / data.length;
+  const barW = Math.min(22, (groupW * 0.72) / SERIES.length - 2);
+  const ticks = [yMin, yMin + (yMax - yMin) * 0.25, yMin + (yMax - yMin) * 0.5, yMin + (yMax - yMin) * 0.75, yMax];
+  const missing = data.some((r) => SERIES.some((s) => r[s.key] == null));
+  const fmt = (v: number | null) => (v == null ? "n/a" : abbreviateNumber(v, currency, 1));
 
   return (
-    <div>
-      {limitedHistory ? (
-        <div className="historical-note">Limited history available.</div>
-      ) : null}
-      <div className="historical-chart-container">
-        <ResponsiveContainer width="100%" height="100%">
-          <AreaChart
-            data={data}
-            margin={{ top: 20, right: 30, left: 0, bottom: 0 }}
-          >
-            <defs>
-              <linearGradient id="revenueGradient" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stopColor={colors.accent} stopOpacity={0.3} />
-                <stop
-                  offset="100%"
-                  stopColor={colors.accent}
-                  stopOpacity={0}
-                />
-              </linearGradient>
-              <linearGradient id="ebitdaGradient" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stopColor={colors.bull} stopOpacity={0.25} />
-                <stop
-                  offset="100%"
-                  stopColor={colors.bull}
-                  stopOpacity={0}
-                />
-              </linearGradient>
-              <linearGradient
-                id="netIncomeGradient"
-                x1="0"
-                y1="0"
-                x2="0"
-                y2="1"
-              >
-                <stop
-                  offset="0%"
-                  stopColor={colors.textSecondary}
-                  stopOpacity={0.2}
-                />
-                <stop
-                  offset="100%"
-                  stopColor={colors.textSecondary}
-                  stopOpacity={0}
-                />
-              </linearGradient>
-            </defs>
-            <CartesianGrid
-              stroke={colors.borderDefault}
-              strokeDasharray="3 3"
-              opacity={0.4}
-            />
-            <XAxis
-              dataKey="year"
-              axisLine={false}
-              tickLine={false}
-              tick={{ fontSize: 11, fill: colors.textTertiary }}
-            />
-            <YAxis
-              tickFormatter={(value) => abbreviateNumber(value as number)}
-              axisLine={false}
-              tickLine={false}
-              tick={{ fontSize: 11, fill: colors.textTertiary }}
-              width={62}
-            />
-            <Tooltip content={renderTooltip} />
-            <Legend
-              wrapperStyle={{
-                fontSize: 11,
-                color: colors.textTertiary,
-                paddingTop: 6,
-              }}
-            />
-            <Area
-              type="monotone"
-              dataKey="revenue"
-              name="Revenue"
-              stroke={colors.accent}
-              strokeWidth={1.5}
-              fill="url(#revenueGradient)"
-            />
-            <Area
-              type="monotone"
-              dataKey="ebitda"
-              name="EBITDA"
-              stroke={colors.bull}
-              strokeWidth={1.5}
-              fill="url(#ebitdaGradient)"
-            />
-            <Area
-              type="monotone"
-              dataKey="net_income"
-              name="Net Income"
-              stroke={colors.textSecondary}
-              strokeWidth={1.5}
-              fill="url(#netIncomeGradient)"
-            />
-          </AreaChart>
-        </ResponsiveContainer>
+    <div className="history">
+      <div className="chart-legend">
+        {SERIES.map((s) => (
+          <span key={s.key}>
+            <i style={{ background: s.color }} aria-hidden="true" />
+            {s.label}
+          </span>
+        ))}
       </div>
+      <div ref={wrapRef} className="history-plot">
+        <svg width={width} height={H} role="img" aria-label="Annual revenue, EBITDA and net income by fiscal year; values are listed in the table below.">
+          {ticks.map((t) => (
+            <g key={t}>
+              <line x1={M.left} x2={width - M.right} y1={y(t)} y2={y(t)} stroke="var(--line)" />
+              <text x={M.left - 10} y={y(t)} dy="0.32em" textAnchor="end" className="axis-label">
+                {abbreviateNumber(t, currency, t === 0 ? 0 : 1)}
+              </text>
+            </g>
+          ))}
+          <line x1={M.left} x2={width - M.right} y1={y(0)} y2={y(0)} stroke="var(--ink-4)" />
+          {data.map((r, gi) => {
+            const gx = M.left + gi * groupW;
+            const start = gx + (groupW - (barW + 2) * SERIES.length) / 2;
+            return (
+              <g key={r.year} onMouseEnter={() => setHover(gi)} onMouseLeave={() => setHover(null)}>
+                <rect x={gx} y={M.top} width={groupW} height={plotH} fill={hover === gi ? "var(--surface-inset)" : "transparent"} />
+                {SERIES.map((s, si) => {
+                  const v = r[s.key];
+                  const x = start + si * (barW + 2);
+                  if (v == null) {
+                    return (
+                      <text key={s.key} x={x + barW / 2} y={y(0) - 6} textAnchor="middle" className="axis-label">
+                        ·
+                      </text>
+                    );
+                  }
+                  const top = Math.min(y(v), y(0));
+                  const h = Math.max(1, Math.abs(y(v) - y(0)));
+                  return <rect key={s.key} x={x} y={top} width={barW} height={h} rx={v >= 0 ? 3 : 2} fill={s.color} />;
+                })}
+                <text x={gx + groupW / 2} y={H - 8} textAnchor="middle" className="axis-label">
+                  FY{r.year}
+                </text>
+              </g>
+            );
+          })}
+        </svg>
+        {hover != null ? (
+          <div
+            className="chart-tooltip"
+            style={{ left: Math.min(width - 180, Math.max(0, M.left + hover * groupW + groupW / 2 - 90)) }}
+          >
+            <strong>FY{data[hover].year}</strong>
+            {SERIES.map((s) => (
+              <span key={s.key}>
+                <i style={{ background: s.color }} aria-hidden="true" />
+                {s.label}
+                <b className="num">{fmt(data[hover][s.key])}</b>
+              </span>
+            ))}
+          </div>
+        ) : null}
+      </div>
+      <details className="chart-table">
+        <summary>View as table</summary>
+        <div className="table-scroll">
+          <table className="data-table">
+            <thead>
+              <tr>
+                <th scope="col">{currency ?? "USD"}</th>
+                {data.map((r) => <th key={r.year} scope="col" className="num">FY{r.year}</th>)}
+              </tr>
+            </thead>
+            <tbody>
+              {SERIES.map((s) => (
+                <tr key={s.key}>
+                  <th scope="row">{s.label}</th>
+                  {data.map((r) => <td key={r.year} className="num">{fmt(r[s.key])}</td>)}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </details>
+      {missing ? <p className="table-footnote">Some line items were not reported by the provider and are shown as gaps, not zero.</p> : null}
+      {data.length < 3 ? <p className="table-footnote">Limited history: fewer than three fiscal years available.</p> : null}
     </div>
   );
 }

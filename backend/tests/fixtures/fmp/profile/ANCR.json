@@ -1,0 +1,17 @@
+[
+  {
+    "symbol": "ANCR",
+    "price": 71.0,
+    "marketCap": 30000000000.0,
+    "beta": 1.0,
+    "companyName": "Anchor Trust (Synthetic)",
+    "currency": "USD",
+    "exchange": "NYSE",
+    "exchangeFullName": "New York Stock Exchange",
+    "industry": "Banks - Regional",
+    "sector": "Financial Services",
+    "country": "US",
+    "description": "Fictional peer ANCR.",
+    "isEtf": false
+  }
+]
