@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import { BrandMark } from "@/components/BrandMark";
+import { HeaderSearch } from "@/components/HeaderSearch";
 import { ThemeToggle } from "@/components/ThemeToggle";
 
 const NAV = [
@@ -32,6 +33,7 @@ export function Header() {
           </span>
         </Link>
         <nav className="site-nav" aria-label="Primary">
+          <HeaderSearch onHome={pathname === "/"} />
           {NAV.map((item) => (
             <Link
               key={item.href}

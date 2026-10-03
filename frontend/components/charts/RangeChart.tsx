@@ -1,4 +1,7 @@
-import { formatCurrency } from "@/lib/format";
+"use client";
+
+import { useState } from "react";
+import { formatCurrency, formatPercent } from "@/lib/format";
 
 export interface RangeRow {
   label: string;
@@ -8,6 +11,8 @@ export interface RangeRow {
   high: number | null;
   /** Primary model gets the signal hue; peer methods stay neutral. */
   emphasis?: boolean;
+  /** Report section to open when the row is clicked. */
+  href?: string;
 }
 
 interface RangeChartProps {
@@ -36,6 +41,7 @@ function niceStep(span: number, targetTicks: number): number {
  * bar from zero, which would falsely imply a range). Supports negative values.
  */
 export function RangeChart({ rows, marker, format: formatRaw = (n, d) => formatCurrency(n, d), caption }: RangeChartProps) {
+  const [active, setActive] = useState<number | null>(null);
   const hasRows = rows.some((r) => finite(r.base));
   if (!hasRows) {
     return <p className="range-empty">No valuation method produced a value for this company — see the notices above.</p>;
@@ -88,7 +94,7 @@ export function RangeChart({ rows, marker, format: formatRaw = (n, d) => formatC
         {caption ? `${caption}. ` : ""}
         {summary}.{marker ? ` ${marker.label}: ${format(marker.value)}.` : ""}
       </div>
-      <div className="range-grid" aria-hidden="true">
+      <div className={`range-grid${active != null ? " has-active" : ""}`} aria-hidden="true" onMouseLeave={() => setActive(null)}>
         <div className="range-head">
           <span />
           <span />
@@ -98,10 +104,20 @@ export function RangeChart({ rows, marker, format: formatRaw = (n, d) => formatC
             <span>High</span>
           </span>
         </div>
-        {rows.map((r) => {
+        {rows.map((r, idx) => {
           const hasRange = finite(r.low) && finite(r.high) && r.high > r.low;
+          const vsMarket =
+            finite(r.base) && r.base > 0 && marker && finite(marker.value) && marker.value > 0 ? r.base / marker.value - 1 : null;
+          const open = r.href
+            ? () => document.getElementById(r.href!.replace(/^#/, ""))?.scrollIntoView({ behavior: "smooth", block: "start" })
+            : undefined;
           return (
-            <div key={r.label} className={`range-row${r.emphasis ? " is-emphasis" : ""}`}>
+            <div
+              key={r.label}
+              className={`range-row${r.emphasis ? " is-emphasis" : ""}${active === idx ? " is-active" : ""}${open ? " is-link" : ""}`}
+              onMouseEnter={() => setActive(idx)}
+              onClick={open}
+            >
               <span className="range-label">
                 {r.label}
                 {r.sublabel ? <small>{r.sublabel}</small> : null}
@@ -125,6 +141,21 @@ export function RangeChart({ rows, marker, format: formatRaw = (n, d) => formatC
                     className={hasRange ? "range-base" : "range-point"}
                     style={{ left: `${pct(r.base)}%` }}
                   />
+                ) : null}
+                {active === idx && finite(r.base) ? (
+                  <span
+                    className={`range-tip${pct(r.base) > 70 ? " is-left" : pct(r.base) < 30 ? " is-right" : ""}`}
+                    style={{ left: `${pct(r.base)}%` }}
+                  >
+                    <b className="num">{format(r.base)}</b>
+                    {hasRange ? <span className="num">{format(r.low as number)} – {format(r.high as number)}</span> : <span>point estimate</span>}
+                    {vsMarket != null ? (
+                      <span className={`num tone-${vsMarket > 0 ? "pos" : vsMarket < 0 ? "neg" : "muted"}`}>
+                        {formatPercent(vsMarket, 0)} vs {marker?.label.toLowerCase()}
+                      </span>
+                    ) : null}
+                    {open ? <em>Click to open</em> : null}
+                  </span>
                 ) : null}
               </span>
               <span className="range-values num">

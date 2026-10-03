@@ -22,124 +22,12 @@
   .section-head-split { grid-template-columns: 1fr; }
 }
 
-/* ---------- Hero ---------- */
-.hero {
-  position: relative;
-  overflow: hidden;
-  padding-block: clamp(40px, 7vw, 96px) clamp(48px, 6vw, 80px);
-  border-bottom: 1px solid var(--line);
-}
-.hero-glow {
-  position: absolute;
-  inset: 0;
-  background: var(--hero-glow);
-  pointer-events: none;
-}
-.hero-grid {
-  position: relative;
-  display: grid;
-  grid-template-columns: minmax(0, 1.04fr) minmax(0, 1fr);
-  align-items: center;
-  gap: var(--space-10);
-}
-.hero-copy {
-  display: grid;
-  gap: var(--space-6);
-  max-width: 620px;
-}
 .eyebrow-dot {
   width: 6px;
   height: 6px;
   border-radius: 50%;
   background: var(--signal);
   box-shadow: 0 0 0 4px var(--signal-soft);
-}
-.hero-title {
-  font-size: var(--text-display);
-  line-height: var(--leading-tight);
-  letter-spacing: var(--tracking-display);
-  font-weight: 500;
-  text-wrap: balance;
-}
-.hero-title .serif-accent {
-  color: var(--signal-ink);
-  letter-spacing: -0.02em;
-  padding-right: 0.04em;
-}
-.hero-search {
-  margin-top: var(--space-2);
-}
-.hero-visual-wrap {
-  min-width: 0;
-}
-
-.hero-visual {
-  position: relative;
-  margin: 0;
-}
-.hero-visual-stage {
-  position: relative;
-  aspect-ratio: 16 / 12.5;
-  width: 100%;
-}
-.hero-visual-poster,
-.discount-field-canvas {
-  position: absolute;
-  inset: 0;
-}
-.discount-field-poster {
-  width: 100%;
-  height: 100%;
-}
-.poster-label {
-  font-family: var(--font-mono);
-  font-size: 11px;
-  fill: var(--ink-3);
-  letter-spacing: 0.06em;
-}
-.hero-visual-poster {
-  transition: opacity var(--dur-hero) var(--ease-out);
-}
-.discount-field-canvas {
-  opacity: 0;
-  transition: opacity var(--dur-hero) var(--ease-out);
-}
-.discount-field-canvas canvas {
-  width: 100% !important;
-  height: 100% !important;
-  display: block;
-}
-.hero-visual[data-ready="true"] .discount-field-canvas { opacity: 1; }
-.hero-visual[data-ready="true"] .hero-visual-poster { opacity: 0; }
-
-.hero-legend {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
-  gap: var(--space-2) var(--space-5);
-  margin-top: var(--space-2);
-  font-size: var(--text-xs);
-  color: var(--ink-3);
-}
-.hero-legend-item {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-2);
-}
-.hero-legend-rate .num { color: var(--ink); }
-.legend-swatch {
-  width: 10px;
-  height: 10px;
-  border-radius: 2px;
-  display: inline-block;
-}
-.legend-swatch-ghost { border: 1px solid var(--ink-3); }
-.legend-swatch-solid { background: var(--signal); }
-
-@media (max-width: 960px) {
-  .hero-grid { grid-template-columns: 1fr; gap: var(--space-6); }
-  .hero-copy { max-width: none; }
-  .hero-visual-stage { aspect-ratio: 16 / 11; }
 }
 
 /* ---------- Pipeline ---------- */
@@ -592,3 +480,31 @@ input[type="range"]:focus-visible {
   .range-head-values, .range-values { display: none; }
   .range-head > :nth-child(3), .range-axis > :nth-child(3) { display: none; }
 }
+
+/* Range chart interaction */
+.range-row > * { transition: opacity var(--dur-micro) var(--ease-out), background var(--dur-micro) var(--ease-out); }
+.range-grid.has-active .range-row:not(.is-active) > * { opacity: 0.45; }
+.range-row.is-active > .range-track { background: color-mix(in oklab, var(--signal) 6%, transparent); }
+.range-row.is-link { cursor: pointer; }
+.range-tip {
+  position: absolute;
+  bottom: calc(50% + 16px);
+  translate: -50% 0;
+  z-index: 5;
+  display: grid;
+  gap: 1px;
+  padding: 7px 10px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--line-strong);
+  background: var(--surface-raised);
+  box-shadow: var(--shadow-md);
+  font-size: var(--text-xs);
+  color: var(--ink-3);
+  white-space: nowrap;
+  pointer-events: none;
+  animation: fade-up 160ms var(--ease-out) both;
+}
+.range-tip.is-left { translate: calc(-100% + 14px) 0; }
+.range-tip.is-right { translate: -14px 0; }
+.range-tip b { color: var(--ink); font-size: var(--text-sm); font-weight: 600; }
+.range-tip em { font-style: normal; font-size: var(--text-2xs); color: var(--ink-4); margin-top: 2px; }

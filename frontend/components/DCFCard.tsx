@@ -1,5 +1,6 @@
 import type { DCFResult } from "@/types/valuation";
 import { ModelWarnings } from "@/components/ModelWarnings";
+import { DCFScenario } from "@/components/report/DCFScenario";
 import { WaccTable } from "@/components/WaccTable";
 import { abbreviateNumber, formatCurrency, formatPercent, formatRate, toneOf } from "@/lib/format";
 
@@ -143,6 +144,8 @@ export function DCFCard({ dcf, currency }: DCFCardProps) {
           </dl>
         </div>
       </div>
+
+      <DCFScenario dcf={dcf} currency={currency} />
 
       {dcf.wacc_breakdown ? <WaccTable breakdown={dcf.wacc_breakdown} currency={currency} /> : null}
       <ModelWarnings warnings={dcf.warnings} />

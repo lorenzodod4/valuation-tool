@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { ArrowUpRight, Database, Gauge, ShieldCheck, TriangleAlert } from "lucide-react";
-import { DiscountFieldPoster } from "@/components/hero/DiscountFieldPoster";
-import { HeroVisual } from "@/components/hero/HeroVisual";
+import { HeroPoster } from "@/components/hero/HeroPoster";
+import { HeroScene } from "@/components/hero/HeroScene";
 import { ValuationDemo } from "@/components/landing/ValuationDemo";
 import { Reveal } from "@/components/Reveal";
 import { SearchBar } from "@/components/SearchBar";
@@ -52,27 +52,28 @@ export default function HomePage() {
   return (
     <div className="landing">
       <section className="hero" aria-labelledby="hero-title">
-        <div className="hero-glow" aria-hidden="true" />
-        <div className="container hero-grid">
+        <HeroScene poster={<HeroPoster />} />
+        <div className="hero-veil" aria-hidden="true" />
+        <div className="container hero-inner">
           <div className="hero-copy">
             <p className="eyebrow fade-up" style={{ ["--i" as string]: 0 }}>
               <span className="eyebrow-dot" aria-hidden="true" />
               Equity valuation · first pass in seconds
             </p>
             <h1 id="hero-title" className="hero-title fade-up" style={{ ["--i" as string]: 1 }}>
-              What is a company worth <span className="serif-accent">today?</span>
+              From the whole market <span className="serif-accent">to what one stock is worth.</span>
             </h1>
             <p className="lede fade-up" style={{ ["--i" as string]: 2 }}>
-              Type a ticker. Get a discounted cash flow, peer multiples, a reverse DCF and a
-              football field — with every assumption on the page, and every caveat in plain sight.
+              Type a ticker. Statements, peers and cost of capital become a DCF, a reverse DCF and a football
+              field — with every assumption on the page, and every caveat in plain sight.
             </p>
             <div id="analyze" className="hero-search fade-up" style={{ ["--i" as string]: 3 }}>
               <SearchBar />
             </div>
           </div>
-          <div className="fade-up hero-visual-wrap" style={{ ["--i" as string]: 2 }}>
-            <HeroVisual poster={<DiscountFieldPoster />} />
-          </div>
+          <p className="hero-hint fade-up" style={{ ["--i" as string]: 4 }}>
+            Move the cursor through the particles · switch acts below
+          </p>
         </div>
       </section>
 

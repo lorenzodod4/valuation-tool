@@ -47,6 +47,7 @@ function methodRows(data: FullValuation, multiples: MultiplesResult | null): Ran
       low: a.per_share_low ?? null,
       high: a.per_share_high ?? null,
       emphasis: true,
+      href: "#model",
     });
   }
   const iv = multiples?.implied_valuations;
@@ -58,6 +59,7 @@ function methodRows(data: FullValuation, multiples: MultiplesResult | null): Ran
       base: v.implied_per_share,
       low: v.implied_per_share_low ?? null,
       high: v.implied_per_share_high ?? null,
+      href: "#comps",
     });
   };
   if (iv) {
