@@ -1,0 +1,17 @@
+[
+  {
+    "symbol": "THIN",
+    "price": 22.0,
+    "marketCap": 1100000000,
+    "beta": null,
+    "companyName": "Sparse Data Corp (Synthetic)",
+    "currency": "USD",
+    "exchange": "NASDAQ",
+    "exchangeFullName": "NASDAQ Global Select",
+    "industry": "Specialty Retail",
+    "sector": "Consumer Cyclical",
+    "country": "US",
+    "description": "",
+    "isEtf": false
+  }
+]

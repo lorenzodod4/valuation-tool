@@ -1,0 +1,17 @@
+[
+  {
+    "symbol": "ORBT",
+    "price": 88.1,
+    "marketCap": 61000000000.0,
+    "beta": 1.1,
+    "companyName": "Orbital Data (Synthetic)",
+    "currency": "USD",
+    "exchange": "NASDAQ",
+    "exchangeFullName": "NASDAQ Global Select",
+    "industry": "Software - Infrastructure",
+    "sector": "Technology",
+    "country": "US",
+    "description": "Fictional peer ORBT.",
+    "isEtf": false
+  }
+]

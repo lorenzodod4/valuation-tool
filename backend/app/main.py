@@ -16,6 +16,10 @@ logging.basicConfig(
     format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
     datefmt="%Y-%m-%d %H:%M:%S",
 )
+# httpx logs full request URLs at INFO, and FMP authenticates via an `apikey`
+# query parameter — never let those lines reach the logs.
+logging.getLogger("httpx").setLevel(logging.WARNING)
+logging.getLogger("httpcore").setLevel(logging.WARNING)
 logger = logging.getLogger(__name__)
 logger.info("Starting Valuation Tool API")
 
@@ -23,6 +27,21 @@ logger.info("Starting Valuation Tool API")
 # Simple in-memory rate limiter: max N requests per IP in a sliding window.
 RATE_LIMIT_REQUESTS = int(os.getenv("RATE_LIMIT_REQUESTS", "20"))
 RATE_LIMIT_WINDOW_SECONDS = int(os.getenv("RATE_LIMIT_WINDOW", "60"))
+
+# Number of reverse proxies in front of the app that append to X-Forwarded-For
+# (e.g. 1 on Render). 0 = use the socket peer address. Only the entries added by
+# trusted proxies are read, so a client cannot spoof its way past the limiter.
+TRUSTED_PROXY_HOPS = int(os.getenv("TRUSTED_PROXY_HOPS", "0"))
+
+
+def _client_ip(request: Request) -> str:
+    if TRUSTED_PROXY_HOPS > 0:
+        forwarded = request.headers.get("x-forwarded-for", "")
+        hops = [h.strip() for h in forwarded.split(",") if h.strip()]
+        if len(hops) >= TRUSTED_PROXY_HOPS:
+            return hops[-TRUSTED_PROXY_HOPS]
+    return request.client.host if request.client else "unknown"
+
 
 class RateLimitMiddleware(BaseHTTPMiddleware):
     """Sliding-window rate limiter keyed by client IP.
@@ -38,15 +57,23 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         self._requests_per_window = requests_per_window
         self._window_seconds = window_seconds
         self._history: dict[str, collections.deque[float]] = {}
+        self._calls_since_prune = 0
 
     async def dispatch(self, request: Request, call_next):
         # Skip rate limiting for non-valuation endpoints.
         if not request.url.path.startswith("/api/valuation"):
             return await call_next(request)
 
-        client_ip = request.client.host if request.client else "unknown"
+        client_ip = _client_ip(request)
         now = time.monotonic()
         window_start = now - self._window_seconds
+
+        # Bound memory: periodically drop IPs with no requests in the window.
+        self._calls_since_prune += 1
+        if self._calls_since_prune >= 500:
+            self._calls_since_prune = 0
+            for ip in [ip for ip, d in self._history.items() if not d or d[-1] < window_start]:
+                del self._history[ip]
 
         # Get or create the deque for this IP, dropping expired entries.
         deq = self._history.get(client_ip)
@@ -99,14 +126,18 @@ def create_app() -> FastAPI:
     else:
         allowed_origins = default_origins
 
-    # Allow Vercel preview deployments via regex (any *.vercel.app subdomain)
+    # Production + preview deployments of this project only. The API uses no
+    # cookies or auth headers, so credentials are not allowed.
+    origin_regex = os.getenv(
+        "ALLOWED_ORIGIN_REGEX", r"https://valuation-tool[a-z0-9-]*\.vercel\.app"
+    )
     application.add_middleware(
         CORSMiddleware,
         allow_origins=allowed_origins,
-        allow_origin_regex=r"https://.*\.vercel\.app",
-        allow_credentials=True,
-        allow_methods=["*"],
-        allow_headers=["*"],
+        allow_origin_regex=origin_regex,
+        allow_credentials=False,
+        allow_methods=["GET", "POST", "OPTIONS"],
+        allow_headers=["Content-Type"],
     )
 
     application.include_router(valuation.router)

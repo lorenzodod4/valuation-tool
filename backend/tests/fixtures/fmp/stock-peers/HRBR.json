@@ -1,0 +1,14 @@
+[
+  {
+    "symbol": "TIDE",
+    "companyName": "Tidewater Financial",
+    "price": 33.0,
+    "mktCap": 15000000000.0
+  },
+  {
+    "symbol": "ANCR",
+    "companyName": "Anchor Trust",
+    "price": 71.0,
+    "mktCap": 30000000000.0
+  }
+]

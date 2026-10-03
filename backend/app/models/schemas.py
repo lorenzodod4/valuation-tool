@@ -1,6 +1,6 @@
 """Pydantic response/request models for the valuation API."""
 
-from typing import Any
+from typing import Annotated, Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -17,10 +17,18 @@ class CompanyProfile(BaseModel):
     price: float | None = None
     currency: str | None = None
     pe_ratio: float | None = None
+    peg_ratio: float | None = None
+    # Not available on the FMP free tier; always None (kept for API stability).
     forward_pe: float | None = None
     shares_outstanding: float | None = None
     beta: float | None = None
     description: str | None = None
+    exchange: str | None = None
+    exchange_full_name: str | None = None
+    # Unix timestamp of when the profile/price was fetched from the provider.
+    data_as_of: int | None = None
+    # True when the provider was unavailable and a cached copy was served.
+    served_stale: bool = False
 
 
 class FinancialStatement(BaseModel):
@@ -33,7 +41,9 @@ class FinancialStatement(BaseModel):
 class DCFAssumptions(BaseModel):
     """Optional overrides for DCF assumptions; missing fields fall back to auto-derived defaults."""
 
-    revenue_growth_rates: list[float] | None = None
+    revenue_growth_rates: (
+        list[Annotated[float, Field(ge=-0.50, le=1.00)]] | None
+    ) = Field(default=None, min_length=5, max_length=5)
     ebit_margin: float | None = Field(default=None, ge=-0.50, le=0.70)
     tax_rate: float | None = Field(default=None, ge=0.0, le=0.40)
     da_pct_revenue: float | None = Field(default=None, ge=0.0, le=0.50)
@@ -98,6 +108,7 @@ class MultiplesResult(BaseModel):
     current_price: float | None = None
     peers_used: list[str]
     peer_source: str | None = None
+    period_basis: str | None = None
     warnings: list[str] = []
 
 
@@ -138,4 +149,8 @@ class FullValuation(BaseModel):
     profile: CompanyProfile
     dcf: DCFResult | None = None
     ddm: DDMResult | None = None
-    multiples: MultiplesResult
+    multiples: MultiplesResult | None = None
+    primary_model: Literal["dcf", "ddm"] = "dcf"
+    # Partial-result disclosures, e.g. "DCF unavailable: latest revenue is
+    # non-positive". The page still renders whatever could be computed.
+    notices: list[str] = []

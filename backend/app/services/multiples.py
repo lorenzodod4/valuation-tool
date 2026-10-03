@@ -81,6 +81,50 @@ class MultiplesValuator:
     def __init__(self, fetcher: FinancialDataFetcher | None = None) -> None:
         self.fetcher = fetcher or FinancialDataFetcher()
 
+    def compute_peer_multiples(self, ticker: str) -> dict[str, Any]:
+        """Peer multiples with the minimum number of FMP calls.
+
+        Peer statistics only use the four ratios. When FMP's TTM fields cover
+        all of them (the common case) the three statement endpoints are not
+        needed, cutting a peer from six calls to three. If any ratio is missing
+        we fall back to the full statement-based derivation, which produces
+        exactly the same numbers as before.
+        """
+        snapshot = self.fetcher.get_market_snapshot(ticker)
+        if snapshot is None:
+            raise ValueError(f"Ticker '{ticker}' not found")
+        km = snapshot.get("key_metrics_ttm") or {}
+        ratios = snapshot.get("ratios_ttm") or {}
+        ttm_complete = all(
+            self._to_float(v) is not None
+            for v in (
+                ratios.get("pe_ratio"),
+                ratios.get("p_book"),
+                km.get("ev_ebitda"),
+                km.get("ev_sales"),
+            )
+        )
+        if not ttm_complete:
+            return self.compute_multiples(ticker)
+
+        profile = snapshot.get("profile") or {}
+        return {
+            "ticker": ticker.upper(),
+            "symbol": profile.get("symbol") or ticker.upper(),
+            "name": profile.get("name"),
+            "market_cap": self._to_float(profile.get("market_cap")),
+            "enterprise_value": self._to_float(km.get("enterprise_value")),
+            "revenue": None,
+            "ebitda": None,
+            "net_income": None,
+            "shares_outstanding": self._to_float(profile.get("shares_outstanding")),
+            "price": self._to_float(profile.get("price")),
+            "pe_ratio": self._to_float(ratios.get("pe_ratio")),
+            "ev_ebitda": self._to_float(km.get("ev_ebitda")),
+            "ev_sales": self._to_float(km.get("ev_sales")),
+            "p_book": self._to_float(ratios.get("p_book")),
+        }
+
     def compute_multiples(self, ticker: str) -> dict[str, Any]:
         """Compute trading multiples for a single ticker from the latest fiscal year."""
         financials = self.fetcher.get_all_for_ticker(ticker)
@@ -214,7 +258,7 @@ class MultiplesValuator:
         skipped_peers: list[dict[str, str]] = []
         for peer in peer_tickers:
             try:
-                peers.append(self.compute_multiples(peer))
+                peers.append(self.compute_peer_multiples(peer))
             except Exception as exc:
                 message = str(exc)
                 skipped_peers.append({"symbol": peer.upper(), "reason": message})
@@ -425,56 +469,3 @@ class MultiplesValuator:
             "implied_per_share": implied_per_share,
             "multiple_used": multiple,
         }
-
-
-def _fmt(value: Any, spec: str = ",.2f") -> str:
-    if value is None:
-        return "n/a"
-    try:
-        return format(value, spec)
-    except (TypeError, ValueError):
-        return str(value)
-
-
-if __name__ == "__main__":
-    valuator = MultiplesValuator()
-
-    print("Computing multiples valuation for AAPL...")
-    result = valuator.valuate_with_multiples("AAPL")
-
-    target = result["target_metrics"]
-    print(f"\n=== Target: {target['symbol']} ({target['name']}) ===")
-    print(f"Market Cap:        {_fmt(target['market_cap'], ',.0f')}")
-    print(f"Enterprise Value:  {_fmt(target['enterprise_value'], ',.0f')}")
-    print(f"Revenue:           {_fmt(target['revenue'], ',.0f')}")
-    print(f"EBITDA:            {_fmt(target['ebitda'], ',.0f')}")
-    print(f"Net Income:        {_fmt(target['net_income'], ',.0f')}")
-    print(f"P/E:               {_fmt(target['pe_ratio'])}")
-    print(f"EV/EBITDA:         {_fmt(target['ev_ebitda'])}")
-    print(f"EV/Sales:          {_fmt(target['ev_sales'])}")
-    print(f"P/Book:            {_fmt(target['p_book'])}")
-
-    print(f"\n=== Peers Used: {', '.join(result['peers_used']) or 'none'} ===")
-    stats = result["peer_statistics"]["statistics"]
-    print(f"{'Metric':<12}{'Median':>10}{'Mean':>10}{'Min':>10}{'Max':>10}{'N':>5}")
-    for metric in RATIO_METRICS:
-        s = stats[metric]
-        print(
-            f"{metric:<12}"
-            f"{_fmt(s['median']):>10}"
-            f"{_fmt(s['mean']):>10}"
-            f"{_fmt(s['min']):>10}"
-            f"{_fmt(s['max']):>10}"
-            f"{s['count']:>5}"
-        )
-
-    print(f"\n=== Implied Per-Share Values (current price: {_fmt(result['current_price'])}) ===")
-    for method in ("pe_based", "ev_ebitda_based", "ev_sales_based"):
-        v = result["implied_valuations"][method]
-        if v is None:
-            print(f"{method:<20} n/a")
-        else:
-            print(
-                f"{method:<20} ${_fmt(v['implied_per_share'])}  "
-                f"(multiple={_fmt(v['multiple_used'])})"
-            )

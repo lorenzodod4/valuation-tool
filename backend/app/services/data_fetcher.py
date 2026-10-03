@@ -1,12 +1,41 @@
-"""Financial Modeling Prep data fetcher (FMP /stable endpoints, sync httpx)."""
+"""Financial Modeling Prep data fetcher (FMP /stable endpoints, sync httpx).
 
+Quota discipline is a design constraint here, not an optimisation: the free
+FMP tier allows a few hundred calls per day across *all* users. Every request
+therefore goes through, in order:
+
+1. the SQLite cache (TTL depends on how quickly the payload can change),
+2. single-flight coalescing (concurrent callers for the same key share one
+   upstream call — the valuation page fires four endpoints in parallel that
+   all need the same statements),
+3. the network, with bounded retries and key rotation,
+4. a stale-cache fallback when the provider is unavailable.
+"""
+
+import json
 import logging
 import threading
 import time
+from concurrent.futures import Future
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Any
 
 import httpx
+
+from app.config import (
+    CACHE_TTL_SECONDS,
+    FMP_API_KEYS,
+    FMP_BASE_URL,
+    FMP_FIXTURE_DIR,
+    HTTP_TIMEOUT_SECONDS,
+    STALE_PRICE_MAX_AGE_SECONDS,
+    STALE_STATEMENT_MAX_AGE_SECONDS,
+    STATEMENT_CACHE_TTL_SECONDS,
+)
+from app.services.cache import PersistentCache
+
+logger = logging.getLogger(__name__)
 
 
 class FmpProviderError(Exception):
@@ -28,14 +57,25 @@ class InvalidApiKeyError(FmpProviderError):
 class TickerNotFoundError(FmpProviderError):
     """Raised when a ticker is not found in FMP."""
 
-from app.config import (
-    FMP_API_KEYS,
-    FMP_BASE_URL,
-    HTTP_TIMEOUT_SECONDS,
-)
-from app.services.cache import PersistentCache
 
-logger = logging.getLogger(__name__)
+class ProviderUnavailableError(FmpProviderError):
+    """Raised on network failures, 5xx responses or malformed payloads."""
+
+
+# Endpoints whose payloads only change when a new filing lands.
+_SLOW_CHANGING_PREFIXES = ("income:", "balance:", "cashflow:", "peers:")
+
+
+def _ttl_for(cache_key: str) -> int:
+    if cache_key.startswith(_SLOW_CHANGING_PREFIXES):
+        return STATEMENT_CACHE_TTL_SECONDS
+    return CACHE_TTL_SECONDS
+
+
+def _stale_window_for(cache_key: str) -> int:
+    if cache_key.startswith(_SLOW_CHANGING_PREFIXES):
+        return STALE_STATEMENT_MAX_AGE_SECONDS
+    return STALE_PRICE_MAX_AGE_SECONDS
 
 
 class KeyRotator:
@@ -45,6 +85,9 @@ class KeyRotator:
     - `get_current_key()` returns the first key not in the exhausted set.
     - `mark_exhausted(key)` records a key as out-of-quota for the rest of the day.
     - The exhausted set is wiped automatically on UTC date rollover.
+
+    Keys are only ever referred to by slot number in logs — never by value or
+    suffix.
     """
 
     def __init__(self, keys: list[str]) -> None:
@@ -66,13 +109,9 @@ class KeyRotator:
             self._maybe_reset()
             for idx, key in enumerate(self._keys, start=1):
                 if key not in self._exhausted_today:
-                    logger.info(
-                        "Using FMP key #%s (last 4: ...%s)",
-                        idx,
-                        key[-4:],
-                    )
+                    logger.debug("Using FMP key slot #%s", idx)
                     return key
-            raise RuntimeError(
+            raise QuotaExhaustedError(
                 "All FMP keys exhausted today. Resets at 00:00 UTC."
             )
 
@@ -83,16 +122,59 @@ class KeyRotator:
             except ValueError:
                 idx = "?"
             logger.warning(
-                "Marking FMP key #%s as exhausted (reason: %s, last 4: ...%s)",
-                idx,
-                reason,
-                key[-4:],
+                "Marking FMP key slot #%s as exhausted (reason: %s)", idx, reason
             )
             self._exhausted_today.add(key)
+
+    def reset(self) -> None:
+        with self._lock:
+            self._exhausted_today.clear()
 
 
 # Module-level singleton — shared across every FinancialDataFetcher instance.
 _rotator = KeyRotator(FMP_API_KEYS)
+
+
+_FIXTURE_ENDPOINTS = {
+    "/profile": "profile",
+    "/income-statement": "income-statement",
+    "/balance-sheet-statement": "balance-sheet-statement",
+    "/cash-flow-statement": "cash-flow-statement",
+    "/key-metrics-ttm": "key-metrics-ttm",
+    "/ratios-ttm": "ratios-ttm",
+    "/stock-peers": "stock-peers",
+}
+
+
+def fixture_transport(fixture_dir: str | Path) -> httpx.MockTransport:
+    """Serve FMP-shaped responses from `<dir>/<endpoint>/<SYMBOL>.json`.
+
+    A missing fixture answers `200 []`, which is what FMP returns for an
+    unknown symbol. A fixture file may also be `{"__status__": 429}` etc. to
+    simulate provider failures deterministically.
+    """
+    root = Path(fixture_dir)
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        path = request.url.path
+        endpoint = next(
+            (name for suffix, name in _FIXTURE_ENDPOINTS.items() if path.endswith(suffix)),
+            None,
+        )
+        symbol = (request.url.params.get("symbol") or "").upper()
+        if endpoint is None or not symbol:
+            return httpx.Response(404, json={"message": "Unknown fixture endpoint"})
+        file = root / endpoint / f"{symbol}.json"
+        if not file.is_file():
+            return httpx.Response(200, json=[])
+        payload = json.loads(file.read_text())
+        if isinstance(payload, dict) and "__status__" in payload:
+            return httpx.Response(
+                int(payload["__status__"]), json=payload.get("body", {})
+            )
+        return httpx.Response(200, json=payload)
+
+    return httpx.MockTransport(handler)
 
 
 class FinancialDataFetcher:
@@ -100,13 +182,30 @@ class FinancialDataFetcher:
 
     _client: httpx.Client | None = None
     _cache: PersistentCache | None = None
+    _inflight: dict[str, Future] = {}
+    _inflight_lock = threading.Lock()
+    # Count of HTTP requests actually sent upstream since process start.
+    upstream_calls: int = 0
+    _counter_lock = threading.Lock()
+    # Retry backoff in seconds; patched to 0 in tests.
+    retry_backoff_seconds: float = 1.0
 
     def __init__(self) -> None:
         if FinancialDataFetcher._client is None:
-            FinancialDataFetcher._client = httpx.Client(
-                base_url=FMP_BASE_URL,
-                timeout=HTTP_TIMEOUT_SECONDS,
-            )
+            if FMP_FIXTURE_DIR:
+                logger.warning(
+                    "FMP fixture mode active (%s): no network requests will be made.",
+                    FMP_FIXTURE_DIR,
+                )
+                FinancialDataFetcher._client = httpx.Client(
+                    base_url=FMP_BASE_URL,
+                    transport=fixture_transport(FMP_FIXTURE_DIR),
+                )
+            else:
+                FinancialDataFetcher._client = httpx.Client(
+                    base_url=FMP_BASE_URL,
+                    timeout=HTTP_TIMEOUT_SECONDS,
+                )
         if FinancialDataFetcher._cache is None:
             FinancialDataFetcher._cache = PersistentCache()
 
@@ -121,11 +220,15 @@ class FinancialDataFetcher:
         successfully with these fields left at None.
         """
         sym = symbol.upper()
-        data = self._request("/profile", {"symbol": sym}, f"profile:{sym}")
+        data, meta = self._request_with_meta("/profile", {"symbol": sym}, f"profile:{sym}")
         if not data:
             return None
         raw = data[0] if isinstance(data, list) else data
+        if not isinstance(raw, dict):
+            return None
         profile = self._normalize_profile(raw)
+        profile["data_as_of"] = meta.get("fetched_at")
+        profile["served_stale"] = bool(meta.get("stale"))
 
         try:
             ratios = self.get_ratios_ttm(sym)
@@ -133,8 +236,7 @@ class FinancialDataFetcher:
             ratios = None
         if ratios:
             profile["pe_ratio"] = ratios.get("pe_ratio")
-            # PEG ratio is the closest forward-looking proxy on the free tier.
-            profile["forward_pe"] = ratios.get("peg_ratio")
+            profile["peg_ratio"] = ratios.get("peg_ratio")
 
         return profile
 
@@ -148,9 +250,7 @@ class FinancialDataFetcher:
             {"symbol": sym, "limit": limit},
             f"income:{sym}:{limit}",
         )
-        if not isinstance(data, list):
-            return []
-        return [self._normalize_income(item) for item in data]
+        return self._normalize_rows(data, self._normalize_income)
 
     def get_balance_sheet(
         self, symbol: str, limit: int = 5
@@ -162,9 +262,7 @@ class FinancialDataFetcher:
             {"symbol": sym, "limit": limit},
             f"balance:{sym}:{limit}",
         )
-        if not isinstance(data, list):
-            return []
-        return [self._normalize_balance(item) for item in data]
+        return self._normalize_rows(data, self._normalize_balance)
 
     def get_cash_flow(
         self, symbol: str, limit: int = 5
@@ -176,9 +274,7 @@ class FinancialDataFetcher:
             {"symbol": sym, "limit": limit},
             f"cashflow:{sym}:{limit}",
         )
-        if not isinstance(data, list):
-            return []
-        return [self._normalize_cashflow(item) for item in data]
+        return self._normalize_rows(data, self._normalize_cashflow)
 
     def get_key_metrics_ttm(self, symbol: str) -> dict[str, Any] | None:
         """Fetch trailing-twelve-month key metrics. Returns None if unavailable."""
@@ -188,10 +284,8 @@ class FinancialDataFetcher:
             {"symbol": sym},
             f"metrics:{sym}",
         )
-        if not data:
-            return None
-        raw = data[0] if isinstance(data, list) else data
-        return self._normalize_key_metrics(raw)
+        raw = self._first_record(data)
+        return self._normalize_key_metrics(raw) if raw is not None else None
 
     def get_ratios_ttm(self, symbol: str) -> dict[str, Any] | None:
         """Fetch TTM ratios (P/E, P/Book, PEG). Returns None if unavailable."""
@@ -201,10 +295,8 @@ class FinancialDataFetcher:
             {"symbol": sym},
             f"ratios:{sym}",
         )
-        if not data:
-            return None
-        raw = data[0] if isinstance(data, list) else data
-        return self._normalize_ratios_ttm(raw)
+        raw = self._first_record(data)
+        return self._normalize_ratios_ttm(raw) if raw is not None else None
 
     def get_stock_peers(self, symbol: str) -> list[dict[str, Any]]:
         """Fetch FMP's peer suggestions for a symbol.
@@ -225,7 +317,7 @@ class FinancialDataFetcher:
             return []
         if not isinstance(data, list):
             return []
-        return data
+        return [p for p in data if isinstance(p, dict)]
 
     def get_all_for_ticker(self, symbol: str) -> dict[str, Any] | None:
         """Fetch profile + 3 statements + TTM metrics + TTM ratios in one bundle.
@@ -245,40 +337,102 @@ class FinancialDataFetcher:
             "ratios_ttm": self.get_ratios_ttm(symbol),
         }
 
+    def get_market_snapshot(self, symbol: str) -> dict[str, Any] | None:
+        """Profile + TTM ratios + TTM key metrics — no statements (3 calls).
+
+        Enough to compute a peer's P/E, EV/EBITDA, EV/Sales and P/Book whenever
+        FMP's TTM fields are populated, which is the common case.
+        """
+        profile = self.get_profile(symbol)
+        if profile is None:
+            return None
+        return {
+            "profile": profile,
+            "key_metrics_ttm": self.get_key_metrics_ttm(symbol),
+            "ratios_ttm": self.get_ratios_ttm(symbol),
+        }
+
     # ---------------- HTTP plumbing ----------------
 
-    def _request(
+    def _request(self, path: str, params: dict[str, Any], cache_key: str) -> Any:
+        data, _meta = self._request_with_meta(path, params, cache_key)
+        return data
+
+    def _request_with_meta(
         self, path: str, params: dict[str, Any], cache_key: str
-    ) -> Any:
+    ) -> tuple[Any, dict[str, Any]]:
+        """Return (payload, meta) where meta has `fetched_at` and `stale`."""
         cache = FinancialDataFetcher._cache
         assert cache is not None
-        cached = cache.get(cache_key)
-        if cached is not None:
-            return cached
+        cached, created_at = cache.get_with_age(cache_key)
+        now = int(time.time())
+        if cached is not None and created_at is not None and created_at > now - _ttl_for(cache_key):
+            return cached, {"fetched_at": created_at, "stale": False}
 
+        # Single-flight: the first caller for a key does the network work; any
+        # concurrent caller waits on the same Future instead of spending quota.
+        with FinancialDataFetcher._inflight_lock:
+            future = FinancialDataFetcher._inflight.get(cache_key)
+            owner = future is None
+            if owner:
+                future = Future()
+                FinancialDataFetcher._inflight[cache_key] = future
+
+        assert future is not None
+        if not owner:
+            return future.result(timeout=HTTP_TIMEOUT_SECONDS * 4)
+
+        try:
+            data = self._fetch_upstream(path, params)
+            cache.set(cache_key, data)
+            result: tuple[Any, dict[str, Any]] = (data, {"fetched_at": int(time.time()), "stale": False})
+        except (QuotaExhaustedError, ProviderUnavailableError) as exc:
+            stale_ok = (
+                cached is not None
+                and created_at is not None
+                and created_at > now - _stale_window_for(cache_key)
+            )
+            if not stale_ok:
+                future.set_exception(exc)
+                raise
+            logger.warning(
+                "Provider unavailable for %s (%s); serving cached copy from %s",
+                cache_key,
+                type(exc).__name__,
+                datetime.fromtimestamp(created_at, timezone.utc).isoformat(),
+            )
+            result = (cached, {"fetched_at": created_at, "stale": True})
+        except BaseException as exc:
+            future.set_exception(exc)
+            raise
+        finally:
+            with FinancialDataFetcher._inflight_lock:
+                FinancialDataFetcher._inflight.pop(cache_key, None)
+
+        future.set_result(result)
+        return result
+
+    def _fetch_upstream(self, path: str, params: dict[str, Any]) -> Any:
         client = FinancialDataFetcher._client
         assert client is not None
 
         # Track per-key quota-style failures so the final error can distinguish
         # "every key is premium-locked for this ticker" (all 402) from "every
         # key is over its daily call budget" (any 429 in the mix).
-        attempts: list[tuple[str, int]] = []
+        attempts: list[int] = []
 
         # Outer loop: rotate through API keys when one returns 402 or 429.
+        # Bounded by the number of keys because each pass burns one key.
         while True:
             try:
                 current_key = _rotator.get_current_key()
-            except RuntimeError:
-                # No keys left to try — synthesize the most informative error
-                # we can from what each key actually returned.
-                if attempts and all(status == 402 for _, status in attempts):
-                    raise PermissionError(
+            except QuotaExhaustedError:
+                if attempts and all(status == 402 for status in attempts):
+                    raise PremiumTickerError(
                         "Ticker requires premium FMP subscription on all "
                         "available keys. This may be a non-US listed equity."
                     )
-                raise RuntimeError(
-                    "All FMP keys exhausted today. Resets at 00:00 UTC."
-                )
+                raise
 
             full_params = {**params, "apikey": current_key}
 
@@ -286,14 +440,18 @@ class FinancialDataFetcher:
             rotated_for_quota = False
             for attempt in range(2):
                 try:
+                    with FinancialDataFetcher._counter_lock:
+                        FinancialDataFetcher.upstream_calls += 1
                     response = client.get(path, params=full_params)
                 except httpx.RequestError as exc:
                     if attempt == 0:
-                        time.sleep(1)
+                        time.sleep(self.retry_backoff_seconds)
                         continue
-                    raise RuntimeError(
-                        f"Network error contacting FMP: {exc}"
-                    ) from exc
+                    # Deliberately not echoing `exc`: httpx messages can embed
+                    # the request URL, which carries the API key.
+                    raise ProviderUnavailableError(
+                        f"Network error contacting FMP ({type(exc).__name__})"
+                    ) from None
 
                 status = response.status_code
                 if status in (401, 403):
@@ -301,7 +459,7 @@ class FinancialDataFetcher:
                 if status == 429:
                     # Genuine rate-limit: burn this key and rotate.
                     _rotator.mark_exhausted(current_key, reason="429")
-                    attempts.append((current_key, status))
+                    attempts.append(status)
                     rotated_for_quota = True
                     break
                 if status == 402:
@@ -309,73 +467,78 @@ class FinancialDataFetcher:
                     #  a) premium ticker (ticker-specific, do NOT burn key)
                     #  b) key plan restriction (global, burn key)
                     # Inspect body to decide.
-                    body_text = ""
+                    lower_body = ""
                     try:
-                        body_text = response.text[:500]
+                        lower_body = response.text[:500].lower()
                     except Exception:
                         pass
-                    lower_body = body_text.lower()
                     if any(
                         token in lower_body
                         for token in ("premium", "subscription", "ticker", "not available")
                     ):
-                        # Ticker-specific premium error — stop trying this ticker
-                        # on all keys without burning them.
                         raise PremiumTickerError(
                             "Ticker requires premium FMP subscription. "
                             "This may be a non-US listed equity or a ticker "
                             "outside the free tier."
                         )
-                    # Otherwise treat as key-level restriction and burn.
                     _rotator.mark_exhausted(current_key, reason="402")
-                    attempts.append((current_key, status))
+                    attempts.append(status)
                     rotated_for_quota = True
                     break
                 if status >= 500:
                     if attempt == 0:
-                        time.sleep(1)
+                        time.sleep(self.retry_backoff_seconds)
                         continue
-                    raise FmpProviderError(f"FMP server error ({status})")
+                    raise ProviderUnavailableError(f"FMP server error ({status})")
                 if status == 404:
-                    raise TickerNotFoundError(
-                        f"Ticker not found in FMP ({response.text[:200]})"
-                    )
+                    raise TickerNotFoundError("Ticker not found in FMP")
                 if status >= 400:
-                    raise FmpProviderError(
-                        f"FMP request failed ({status}): {response.text[:200]}"
-                    )
+                    raise ProviderUnavailableError(f"FMP request failed ({status})")
 
                 try:
-                    data = response.json()
-                except ValueError as exc:
-                    raise RuntimeError(f"Invalid JSON from FMP: {exc}") from exc
-
-                cache.set(cache_key, data)
-                return data
+                    return response.json()
+                except ValueError:
+                    raise ProviderUnavailableError("Invalid JSON from FMP") from None
 
             if rotated_for_quota:
-                # Re-enter outer loop; get_current_key picks the next key
-                # (or raises if every key is exhausted, at which point the
-                # branch at the top synthesizes the final error).
                 continue
 
-            # Inner loop exited without success and without rotation.
-            raise RuntimeError("FMP request failed after retry")
+            raise ProviderUnavailableError("FMP request failed after retry")
 
     # ---------------- normalization ----------------
 
     @staticmethod
+    def _first_record(data: Any) -> dict[str, Any] | None:
+        raw = data[0] if isinstance(data, list) and data else data
+        return raw if isinstance(raw, dict) and raw else None
+
+    @staticmethod
+    def _normalize_rows(data: Any, normalizer: Any) -> list[dict[str, Any]]:
+        if not isinstance(data, list):
+            return []
+        rows = [normalizer(item) for item in data if isinstance(item, dict)]
+        # FMP returns most-recent-first; enforce it so every downstream
+        # "latest = rows[0]" assumption holds even if the order ever changes.
+        if all(r.get("date") for r in rows):
+            rows.sort(key=lambda r: str(r["date"]), reverse=True)
+        return rows
+
+    @staticmethod
     def _to_float(value: Any) -> float | None:
-        if value is None:
+        if value is None or isinstance(value, bool):
             return None
         try:
-            return float(value)
+            result = float(value)
         except (TypeError, ValueError):
             return None
+        # NaN/inf from a malformed payload must never reach the models.
+        if result != result or result in (float("inf"), float("-inf")):
+            return None
+        return result
 
     @staticmethod
     def _to_int(value: Any) -> int | None:
-        if value is None:
+        if value is None or isinstance(value, bool):
             return None
         try:
             return int(value)
@@ -383,31 +546,54 @@ class FinancialDataFetcher:
             return None
 
     @classmethod
+    def _fiscal_year(cls, raw: dict[str, Any]) -> int | None:
+        """FMP /stable reports `fiscalYear`; the legacy v3 API used
+        `calendarYear`. Fall back to the statement date's year."""
+        for key in ("fiscalYear", "calendarYear"):
+            year = cls._to_int(raw.get(key))
+            if year is not None:
+                return year
+        date = raw.get("date")
+        if isinstance(date, str) and len(date) >= 4:
+            return cls._to_int(date[:4])
+        return None
+
+    @classmethod
+    def _first_float(cls, raw: dict[str, Any], *keys: str) -> float | None:
+        for key in keys:
+            value = cls._to_float(raw.get(key))
+            if value is not None:
+                return value
+        return None
+
+    @classmethod
     def _normalize_profile(cls, raw: dict[str, Any]) -> dict[str, Any]:
         # FMP profile uses `marketCap` (not `mktCap`) and no longer returns
         # `pe` or `sharesOutstanding`. We derive shares from market_cap / price.
-        market_cap = cls._to_float(raw.get("marketCap"))
+        market_cap = cls._first_float(raw, "marketCap", "mktCap")
         price = cls._to_float(raw.get("price"))
         shares_outstanding: float | None = None
-        if market_cap and price and price > 0:
+        if market_cap and market_cap > 0 and price and price > 0:
             shares_outstanding = market_cap / price
 
         return {
             "symbol": raw.get("symbol"),
             "name": raw.get("companyName"),
-            "sector": raw.get("sector"),
-            "industry": raw.get("industry"),
-            "country": raw.get("country"),
-            "currency": raw.get("currency"),
-            "description": raw.get("description"),
+            "sector": raw.get("sector") or None,
+            "industry": raw.get("industry") or None,
+            "country": raw.get("country") or None,
+            "currency": raw.get("currency") or None,
+            "description": raw.get("description") or None,
             "beta": cls._to_float(raw.get("beta")),
             "market_cap": market_cap,
             "price": price,
             "shares_outstanding": shares_outstanding,
-            # P/E TTM and PEG ratio are not in the /stable/profile payload;
-            # populated downstream in `get_profile` from /ratios-ttm. Declared
-            # here so the keys always exist on the returned dict.
+            # P/E TTM and PEG are not in the /stable/profile payload; they are
+            # populated in `get_profile` from /ratios-ttm. Forward P/E is not
+            # available on the free tier and is reported as None rather than
+            # substituted with another ratio.
             "pe_ratio": None,
+            "peg_ratio": None,
             "forward_pe": None,
             "exchange": raw.get("exchange"),
             "exchange_full_name": raw.get("exchangeFullName"),
@@ -421,7 +607,8 @@ class FinancialDataFetcher:
         operating_income = cls._to_float(raw.get("operatingIncome"))
         return {
             "date": raw.get("date"),
-            "year": cls._to_int(raw.get("calendarYear")),
+            "year": cls._fiscal_year(raw),
+            "currency": raw.get("reportedCurrency"),
             "revenue": cls._to_float(raw.get("revenue")),
             "ebitda": cls._to_float(raw.get("ebitda")),
             "operating_income": operating_income,
@@ -436,12 +623,10 @@ class FinancialDataFetcher:
 
     @classmethod
     def _normalize_balance(cls, raw: dict[str, Any]) -> dict[str, Any]:
-        cash = cls._to_float(raw.get("cashAndCashEquivalents"))
-        if cash is None:
-            cash = cls._to_float(raw.get("cashAndShortTermInvestments"))
+        cash = cls._first_float(raw, "cashAndCashEquivalents", "cashAndShortTermInvestments")
         return {
             "date": raw.get("date"),
-            "year": cls._to_int(raw.get("calendarYear")),
+            "year": cls._fiscal_year(raw),
             "total_debt": cls._to_float(raw.get("totalDebt")),
             "cash": cash,
             "stockholder_equity": cls._to_float(
@@ -464,13 +649,18 @@ class FinancialDataFetcher:
         # wants the positive magnitude, so absolute-value at the boundary.
         capex_raw = cls._to_float(raw.get("capitalExpenditure"))
         capex = abs(capex_raw) if capex_raw is not None else None
-        
-        # Dividends paid (also a negative outflow, store as-is for DDM)
-        dividends_paid = cls._to_float(raw.get("dividendsPaid"))
-        
+
+        # Dividends to common shareholders (negative outflow, stored as-is).
+        # /stable splits the legacy `dividendsPaid` into common / preferred /
+        # net. Common is the right basis for a per-share DDM; net and the
+        # legacy field are fallbacks.
+        dividends_paid = cls._first_float(
+            raw, "commonDividendsPaid", "netDividendsPaid", "dividendsPaid"
+        )
+
         return {
             "date": raw.get("date"),
-            "year": cls._to_int(raw.get("calendarYear")),
+            "year": cls._fiscal_year(raw),
             "capex": capex,
             "free_cash_flow": cls._to_float(raw.get("freeCashFlow")),
             "wc_change": cls._to_float(raw.get("changeInWorkingCapital")),
@@ -481,10 +671,10 @@ class FinancialDataFetcher:
     @classmethod
     def _normalize_key_metrics(cls, raw: dict[str, Any]) -> dict[str, Any]:
         return {
-            "market_cap": cls._to_float(raw.get("marketCap")),
+            "market_cap": cls._first_float(raw, "marketCap", "marketCapTTM"),
             "enterprise_value": cls._to_float(raw.get("enterpriseValueTTM")),
             "ev_sales": cls._to_float(raw.get("evToSalesTTM")),
-            "ev_ebitda": cls._to_float(raw.get("evToEBITDATTM")),
+            "ev_ebitda": cls._first_float(raw, "evToEBITDATTM", "enterpriseValueOverEBITDATTM"),
             "roe": cls._to_float(raw.get("returnOnEquityTTM")),
             "roa": cls._to_float(raw.get("returnOnAssetsTTM")),
         }
@@ -498,27 +688,3 @@ class FinancialDataFetcher:
                 raw.get("priceToEarningsGrowthRatioTTM")
             ),
         }
-
-
-if __name__ == "__main__":
-    fetcher = FinancialDataFetcher()
-    bundle = fetcher.get_all_for_ticker("AAPL")
-    if bundle is None:
-        print("Ticker not found")
-    else:
-        profile = bundle["profile"]
-        print(f"Name:           {profile['name']}")
-        print(f"Sector:         {profile['sector']}")
-        print(f"Industry:       {profile['industry']}")
-        print(f"Market Cap:     {profile['market_cap']}")
-        print(f"Price:          {profile['price']}")
-        print(f"Shares Out:     {profile['shares_outstanding']}")
-        income = bundle["income_statement"]
-        if income:
-            latest = income[0]
-            print(f"Latest year:    {latest.get('year')}")
-            print(f"Latest revenue: {latest.get('revenue')}")
-            print(f"Net income:     {latest.get('net_income')}")
-            print(f"Interest exp:   {latest.get('interest_expense')}")
-        km = bundle.get("key_metrics_ttm") or {}
-        print(f"TTM EV/EBITDA:  {km.get('ev_ebitda')}")

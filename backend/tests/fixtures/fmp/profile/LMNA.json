@@ -1,0 +1,17 @@
+[
+  {
+    "symbol": "LMNA",
+    "price": 210.0,
+    "marketCap": 95000000000.0,
+    "beta": 1.1,
+    "companyName": "Lumina Analytics (Synthetic)",
+    "currency": "USD",
+    "exchange": "NASDAQ",
+    "exchangeFullName": "NASDAQ Global Select",
+    "industry": "Software - Infrastructure",
+    "sector": "Technology",
+    "country": "US",
+    "description": "Fictional peer LMNA.",
+    "isEtf": false
+  }
+]

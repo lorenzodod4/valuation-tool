@@ -1,0 +1,17 @@
+[
+  {
+    "symbol": "HRBR",
+    "price": 58.2,
+    "marketCap": 23280000000,
+    "beta": 0.95,
+    "companyName": "Harbor Bancorp (Synthetic)",
+    "currency": "USD",
+    "exchange": "NYSE",
+    "exchangeFullName": "New York Stock Exchange",
+    "industry": "Banks - Regional",
+    "sector": "Financial Services",
+    "country": "US",
+    "description": "Fictional regional bank used as a deterministic DDM fixture.",
+    "isEtf": false
+  }
+]

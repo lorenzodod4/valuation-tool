@@ -1,10 +1,18 @@
 """Application configuration loaded from environment variables."""
 
 import os
+from pathlib import Path
 
 from dotenv import load_dotenv
 
 load_dotenv()
+
+BACKEND_DIR = Path(__file__).resolve().parent.parent
+
+# Offline mode: when set, every FMP request is answered from JSON fixtures on
+# disk instead of the network. Used for local development, demos and tests so
+# the limited FMP quota is never spent on the development loop.
+FMP_FIXTURE_DIR: str | None = os.getenv("FMP_FIXTURE_DIR") or None
 
 
 def _collect_keys() -> list[str]:
@@ -24,18 +32,36 @@ def _collect_keys() -> list[str]:
 
 FMP_API_KEYS: list[str] = _collect_keys()
 if not FMP_API_KEYS:
-    raise RuntimeError(
-        "No FMP API key configured. Set at least FMP_API_KEY_1 in environment."
-    )
+    if FMP_FIXTURE_DIR:
+        # Fixture transport never sends the key anywhere; a placeholder keeps
+        # the rotator logic identical to production.
+        FMP_API_KEYS = ["fixture-mode"]
+    else:
+        raise RuntimeError(
+            "No FMP API key configured. Set at least FMP_API_KEY_1 in environment."
+        )
 
 # Alias so any legacy module importing the singular name still works.
 FMP_API_KEY: str = FMP_API_KEYS[0]
 
 FMP_BASE_URL: str = "https://financialmodelingprep.com/stable"
 
+# Price-sensitive payloads (profile, TTM ratios, TTM key metrics) refresh hourly.
 CACHE_TTL_SECONDS: int = 3600
+# Annual statements and peer lists change at most quarterly; caching them for a
+# day cuts repeat-ticker quota usage by roughly two thirds.
+STATEMENT_CACHE_TTL_SECONDS: int = int(os.getenv("STATEMENT_CACHE_TTL", "86400"))
+# When the provider is unavailable (quota, network, 5xx) an expired cache row
+# younger than this is served instead of failing the request.
+STALE_PRICE_MAX_AGE_SECONDS: int = 24 * 3600
+STALE_STATEMENT_MAX_AGE_SECONDS: int = 7 * 24 * 3600
+
 CACHE_MAXSIZE: int = 500
 HTTP_TIMEOUT_SECONDS: int = 30
+CACHE_DB_PATH: str = os.getenv(
+    "FMP_CACHE_PATH",
+    ":memory:" if FMP_FIXTURE_DIR else str(BACKEND_DIR / "cache.db"),
+)
 
 
 # WACC inputs — sources cited, update every 3-6 months.
