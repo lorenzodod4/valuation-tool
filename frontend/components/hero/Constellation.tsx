@@ -2,9 +2,10 @@
 
 import { useEffect, useRef, useState } from "react";
 import type * as THREE_NS from "three";
+import { ACTS, CHART_W, PRICE_X, ROWS } from "@/components/hero/constellationModel";
 
 /**
- * Concept A — "Costellazione", in three acts:
+ * Homepage entrance — "Constellation", in three acts:
  *   01 Market — thousands of points form a slowly turning sphere (every company);
  *   02 Price  — they fall into a candlestick chart of one stock, with the last
  *               price drawn as a horizontal line;
@@ -13,17 +14,7 @@ import type * as THREE_NS from "three";
  * The cursor parts the particles; the stepper jumps between acts.
  */
 
-export const ACTS = ["Market", "Price", "Value"] as const;
-
-const ROWS = [
-  { label: "DCF", y: 1.05, lo: -1.35, hi: 0.35 },
-  { label: "P/E", y: 0.35, lo: -0.75, hi: 0.95 },
-  { label: "EV/EBITDA", y: -0.35, lo: -0.6, hi: 1.55 },
-  { label: "EV/Sales", y: -1.05, lo: -1.0, hi: 1.35 },
-];
-const PRICE_X = 0.25;
 const CANDLES = 26;
-const CHART_W = 3.2;
 
 // Deterministic price path (illustrative): open/high/low/close per candle.
 function candleSeries() {
@@ -129,7 +120,12 @@ interface Controller {
   goTo: (act: number) => void;
 }
 
-export function Constellation() {
+interface ConstellationProps {
+  onReady?: () => void;
+  onFail?: () => void;
+}
+
+export function Constellation({ onReady, onFail }: ConstellationProps) {
   const hostRef = useRef<HTMLDivElement>(null);
   const labelsRef = useRef<HTMLDivElement>(null);
   const ctrl = useRef<Controller | null>(null);
@@ -140,16 +136,24 @@ export function Constellation() {
     if (!host) return;
     let cleanup: (() => void) | undefined;
     let disposed = false;
-    import("three").then((THREE) => {
-      if (disposed) return;
-      const m = mount(THREE, host, labelsRef.current, setAct);
-      ctrl.current = m;
-      cleanup = m.dispose;
-    });
+    import("three")
+      .then((THREE) => {
+        if (disposed) return;
+        const m = mount(THREE, host, labelsRef.current, setAct);
+        ctrl.current = m;
+        cleanup = m.dispose;
+        onReady?.();
+      })
+      .catch(() => {
+        // No WebGL context or chunk failed to load: the static poster stays.
+        if (!disposed) onFail?.();
+      });
     return () => {
       disposed = true;
       cleanup?.();
     };
+    // Mount once; callbacks are read at mount time only.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   return (
@@ -189,6 +193,7 @@ function mount(
   const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
   const small = window.matchMedia("(max-width: 720px)").matches;
   const N = small ? 4200 : 11000;
+  const wide = window.matchMedia("(min-width: 961px)");
 
   const renderer = new THREE.WebGLRenderer({ antialias: false, alpha: true, powerPreference: "high-performance" });
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
@@ -326,7 +331,8 @@ function mount(
     renderer.setSize(w, h, false);
     camera.aspect = w / h;
     camera.position.z = camera.aspect < 1 ? 7.9 : 7.2;
-    group.position.x = camera.aspect > 1.3 ? 1.55 : 0;
+    // Beside the copy on desktop; centred in its own block when stacked (≤960px).
+    group.position.x = wide.matches && camera.aspect > 1.3 ? 1.55 : 0;
     group.position.y = 0;
     camera.updateProjectionMatrix();
   };
@@ -386,7 +392,7 @@ function mount(
   let reportedAct = -1;
   const io = new IntersectionObserver(([e]) => {
     visible = e.isIntersecting;
-    if (visible) loop();
+    if (visible && !reduce) loop();
   });
   io.observe(host);
 
@@ -394,7 +400,7 @@ function mount(
     const dt = Math.min(0.1, (now - last) / 1000);
     last = now;
     if (!reduce) clock += dt;
-    const target = reduce ? 2 : stageAt(clock);
+    const target = reduce ? stage : stageAt(clock);
     stage += (target - stage) * Math.min(1, dt * 6); // smooths jumps from the stepper
     uniforms.uTime.value += dt;
     uniforms.uStage.value = stage;
@@ -431,6 +437,11 @@ function mount(
     frame(performance.now());
   } else loop();
 
+  const onVisibility = () => {
+    if (!document.hidden && visible && !reduce) loop();
+  };
+  document.addEventListener("visibilitychange", onVisibility);
+
   const mo = new MutationObserver(() => {
     theme();
     if (reduce) frame(performance.now());
@@ -452,6 +463,7 @@ function mount(
       ro.disconnect();
       mo.disconnect();
       window.removeEventListener("pointermove", onMove);
+      document.removeEventListener("visibilitychange", onVisibility);
       geo.dispose();
       mat.dispose();
       renderer.dispose();

@@ -1,0 +1,161 @@
+/* ==========================================================================
+   Homepage entrance — Constellation (sphere → price chart → valuation range)
+   ========================================================================== */
+
+.hero {
+  position: relative;
+  min-height: min(calc(100svh - var(--header-h)), 860px);
+  display: grid;
+  align-items: center;
+  overflow: hidden;
+  isolation: isolate;
+  border-bottom: 1px solid var(--line);
+}
+.hero-scene {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+}
+.hero-veil {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background:
+    linear-gradient(90deg, var(--bg) 0%, color-mix(in oklab, var(--bg) 88%, transparent) 38%, transparent 64%),
+    radial-gradient(70% 60% at 75% 50%, var(--signal-soft), transparent 70%);
+}
+.hero-inner {
+  position: relative;
+  z-index: 1;
+  padding-block: clamp(48px, 8vw, 112px);
+  pointer-events: none;
+}
+.hero-inner > * { pointer-events: auto; }
+.hero-copy {
+  display: grid;
+  gap: var(--space-6);
+  max-width: 600px;
+}
+.hero-title {
+  font-size: var(--text-display);
+  line-height: var(--leading-tight);
+  letter-spacing: var(--tracking-display);
+  font-weight: 500;
+  text-wrap: balance;
+}
+.hero-title .serif-accent {
+  color: var(--signal-ink);
+  letter-spacing: -0.02em;
+  padding-right: 0.04em;
+}
+.hero-search { margin-top: var(--space-2); }
+.hero-hint {
+  margin-top: var(--space-10);
+  width: max-content;
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  letter-spacing: var(--tracking-label);
+  text-transform: uppercase;
+  color: var(--ink-4);
+}
+.hero-scene:not([data-mode="live"]) ~ .hero-inner .hero-hint { display: none; }
+@media (hover: none) { .hero-hint { display: none; } }
+
+/* Poster: static final act. Hidden while the client decides; the live canvas
+   fades in over nothing so the sphere builds from the background. */
+.hero-poster {
+  position: absolute;
+  top: 50%;
+  right: max(var(--gutter), calc((100% - var(--page-max)) / 2 + var(--gutter)));
+  width: min(46%, 560px);
+  translate: 0 -50%;
+  transition: opacity var(--dur-hero) var(--ease-out);
+}
+.hero-poster-svg { display: block; width: 100%; height: auto; overflow: visible; }
+.hero-poster-dot { fill: var(--signal); opacity: 0.85; }
+.hero-poster-dot.is-accent { fill: var(--series-2); }
+.hero-poster-price { stroke: var(--ink); stroke-width: 1.4; stroke-dasharray: 2 4; stroke-linecap: round; }
+.hero-poster-label {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  fill: var(--ink-2);
+}
+.hero-poster-label.is-price { fill: var(--ink); }
+.js .hero-scene[data-mode="pending"] .hero-poster,
+.hero-scene[data-mode="live"] .hero-poster { opacity: 0; }
+
+/* Live scene */
+.constellation, .constellation-canvas { position: absolute; inset: 0; }
+.constellation-canvas { opacity: 0; transition: opacity var(--dur-hero) var(--ease-out); }
+.hero-scene[data-ready="true"] .constellation-canvas { opacity: 1; }
+.constellation-canvas canvas { width: 100% !important; height: 100% !important; display: block; }
+.constellation-labels span {
+  position: absolute;
+  left: 0;
+  top: 0;
+  translate: -100% -50%;
+  padding-right: 10px;
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  letter-spacing: 0.06em;
+  color: var(--ink-2);
+  opacity: 0;
+  white-space: nowrap;
+  pointer-events: none;
+}
+.constellation-labels .is-price { translate: -50% -140%; padding: 0; color: var(--ink); }
+.constellation-labels .is-last {
+  translate: 0 -50%;
+  padding: 2px 8px;
+  border-radius: var(--radius-xs);
+  background: var(--ink);
+  color: var(--bg);
+}
+.constellation-labels .is-caption { translate: 0 -100%; padding: 0; color: var(--ink-3); }
+
+.constellation-stepper {
+  position: absolute;
+  right: max(var(--gutter), calc((100% - var(--page-max)) / 2 + var(--gutter)));
+  bottom: clamp(20px, 4vw, 40px);
+  display: flex;
+  gap: 4px;
+  padding: 4px;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--line);
+  background: color-mix(in oklab, var(--surface) 70%, transparent);
+  backdrop-filter: blur(10px);
+  z-index: 2;
+}
+.constellation-stepper button {
+  height: 30px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: var(--radius-pill);
+  background: transparent;
+  color: var(--ink-3);
+  font: inherit;
+  font-size: var(--text-xs);
+  cursor: pointer;
+  transition: background var(--dur-micro) var(--ease-out), color var(--dur-micro) var(--ease-out);
+}
+.constellation-stepper button .num { color: var(--ink-4); margin-right: 4px; font-size: var(--text-2xs); }
+.constellation-stepper button:hover { color: var(--ink); }
+.constellation-stepper button.is-active { background: var(--ink); color: var(--bg); }
+.constellation-stepper button.is-active .num { color: var(--bg); opacity: 0.6; }
+
+/* Tablet and phone: recompose — copy first, then the scene in its own block */
+@media (max-width: 960px) {
+  .hero { display: flex; flex-direction: column; min-height: 0; }
+  .hero-inner { order: 1; padding-bottom: 0; width: 100%; align-self: stretch; }
+  .hero-scene { position: relative; order: 2; height: 520px; inset: auto; width: 100%; align-self: stretch; }
+  .hero-veil, .hero-hint { display: none; }
+  .hero-poster { left: 50%; right: auto; width: min(100% - 2 * var(--gutter), 560px); translate: -50% -50%; }
+  .constellation-stepper { left: 50%; right: auto; translate: -50% 0; bottom: 12px; }
+  .constellation-stepper button { white-space: nowrap; }
+}
+@media (max-width: 720px) {
+  .hero-scene { height: 440px; }
+  .constellation-stepper button { padding: 0 10px; }
+}

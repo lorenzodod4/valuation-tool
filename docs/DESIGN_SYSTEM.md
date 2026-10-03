@@ -27,15 +27,33 @@ its signed delta so the colour is never the only encoding.
 
 ## Motion
 Three tiers: micro (140 ms, state), major (520 ms, one fade-up per block on first view),
-hero (1.2 s scene build-up, then a slow 14 s "discount-rate breath"). Financial figures
-never animate. `prefers-reduced-motion` and Save-Data get the static SVG poster and
-three.js is not downloaded.
+hero (1.2 s fade-in, then a 3.4 s hold / 1.8 s morph cycle between acts). Financial
+figures never animate. `prefers-reduced-motion`, Save-Data and missing WebGL get the
+static SVG poster and three.js is not downloaded.
 
 ## Hero scene
-`components/hero/DiscountField.tsx`. Columns are the illustrative company's projected
-FCFF: wireframe = nominal cash flow, plate stack = present value. Heights come from the
-same DCF engine as the demo (`lib/dcf-engine.ts`). Render loop pauses off-screen and in
-hidden tabs; DPR capped at 1.75 (1.5 on small screens).
+`components/hero/Constellation.tsx` — one particle system in three acts: **Market**
+(a turning sphere: every company), **Price** (a candlestick chart of one illustrative
+stock with its last price) and **Value** (a football field of valuation ranges against
+the market-price marker). The cursor parts the particles; the stepper jumps between acts.
+Shared geometry lives in `constellationModel.ts`; `HeroPoster.tsx` is the server-rendered
+static final act. Render loop pauses off-screen and in hidden tabs; DPR capped at 2;
+11k particles on desktop, 4.2k on phones. Additive blending on graphite, normal on paper.
+
+## Interaction
+- Report DCF has a **What if?** panel (`components/report/DCFScenario.tsx`): WACC,
+  terminal growth, Y1 growth and EBIT margin run through the client engine from the
+  server's own inputs (`lib/dcf-scenario.ts`, parity-tested). No API request; the
+  report, range chart and PDF keep the server's base case.
+- Range chart rows show a tooltip (base, range, vs market) and open their section on click.
+- Sensitivity cells show a crosshair and a readout against the base case.
+- Header ticker search on every page except home; `/` focuses the nearest ticker field.
+
+## PDF
+`components/ValuationPDF.tsx`, A4, paper palette, the site's typefaces as static TTFs in
+`public/fonts/pdf` (OFL). Order: summary + football field → model → reverse DCF +
+sensitivity (DCF only) → comparables → history, company and sources. Charts are drawn
+from the same numbers as the web report; nothing is recomputed.
 
 ## Components
 Buttons (`btn-primary/secondary/ghost`), `input`, `ticker-search`, `chip`, `badge-*`,
