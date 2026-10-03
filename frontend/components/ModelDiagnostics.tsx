@@ -86,8 +86,8 @@ export function ModelDiagnostics({ data, multiples, historical, sensitivity, rev
         waccAge == null
           ? "Risk-free rate and ERP date unavailable."
           : waccAge > 180
-            ? "Older than six months — verify the risk-free rate and ERP."
-            : "Damodaran risk-free rate and equity risk premium.",
+            ? "Oldest input (date shown) is over six months old — check the source dates in the WACC table."
+            : "US 10-year Treasury yield and Damodaran equity risk premium.",
       tone: waccAge == null ? "watch" : waccAge > 180 ? "watch" : "ok",
     },
     {

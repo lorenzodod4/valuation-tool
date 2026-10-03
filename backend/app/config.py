@@ -65,12 +65,19 @@ CACHE_DB_PATH: str = os.getenv(
 
 
 # WACC inputs — sources cited, update every 3-6 months.
-# Source: Aswath Damodaran, NYU Stern (https://pages.stern.nyu.edu/~adamodar/)
+# Risk-free rate: US 10-year Treasury constant-maturity yield (FRED DGS10).
+#   5.29% on 2026-09-30; ~5.28% close on 2026-10-02.
+# ERP: Aswath Damodaran, NYU Stern (https://pages.stern.nyu.edu/~adamodar/),
+#   implied ERP, trailing-12-month cash yield. Kept at the January 2026 value
+#   until a newer published figure is verified at the source.
+# `data_as_of` is the date of the OLDEST input, so the staleness flag stays honest.
 WACC_INPUTS: dict[str, float | str] = {
-    "risk_free_rate": 0.0418,            # US 10Y Treasury yield, 2026-01-01
+    "risk_free_rate": 0.0528,            # US 10Y Treasury yield, 2026-10-02
     "equity_risk_premium": 0.0423,       # Damodaran Implied ERP, January 2026 update
     "data_as_of": "2026-01-01",
-    "rf_source": "US 10Y Treasury (Damodaran, Jan 2026)",
-    "erp_source": "Damodaran Implied ERP (Jan 2026)",
+    "rf_as_of": "2026-10-02",
+    "erp_as_of": "2026-01-01",
+    "rf_source": "US 10Y Treasury yield (2 Oct 2026)",
+    "erp_source": "Damodaran implied ERP (Jan 2026)",
     "default_cost_of_debt_pretax": 0.045,  # fallback when interest expense unavailable
 }

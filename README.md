@@ -10,7 +10,7 @@
 
 Enter any US-listed ticker. The tool fetches financial data from Financial Modeling Prep and runs a complete valuation workflow:
 
-- **Discounted Cash Flow (DCF)** — 5-year FCFF projection with auto-derived assumptions, real WACC computed per ticker using Damodaran-sourced Rf and ERP, terminal value via Gordon Growth.
+- **Discounted Cash Flow (DCF)** — 5-year FCFF projection with auto-derived assumptions, real WACC computed per ticker from the US 10Y Treasury yield and Damodaran's implied ERP, terminal value via Gordon Growth.
 - **Dividend Discount Model (DDM)** — For financial institutions and REITs, the tool automatically uses DDM instead of DCF. Projects 5 years of dividends with Gordon Growth terminal value and CAPM cost of equity.
 - **Reverse DCF** — Solves for the implied revenue growth rate that justifies the current market price.
 - **Trading Comparables** — peer group sourced dynamically and size-filtered; P/E, EV/EBITDA, EV/Sales, P/Book multiples.
@@ -43,7 +43,7 @@ A first-time ticker costs about 25 calls (6 for the company, 1 peer list, ~3 per
 
 ## WACC methodology
 
-Cost of equity via CAPM with the risk-free rate and equity risk premium from Damodaran (configured in `backend/app/config.py`, dated in every report and flagged after six months), and company beta from FMP. Cost of debt is interest expense ÷ total debt, clamped to 1–15%, with a 4.5% fallback. Tax rate comes from the latest income statement, clamped to 0–35%.
+Cost of equity via CAPM with the US 10-year Treasury yield as the risk-free rate and Damodaran's implied equity risk premium (configured in `backend/app/config.py`, each dated in every report; the oldest input is flagged after six months), and company beta from FMP. Cost of debt is interest expense ÷ total debt, clamped to 1–15%, with a 4.5% fallback. Tax rate comes from the latest income statement, clamped to 0–35%.
 
 WACC = (E/V)×Re + (D/V)×Rd×(1−t). See `/methodology` for every formula and default.
 
@@ -98,7 +98,7 @@ cd ../backend && python -m pytest tests/ -q     # offline; never touches the net
 
 ### Deploying the backend behind a proxy
 
-On Render, set `TRUSTED_PROXY_HOPS=1` so the rate limiter sees real client IPs rather than the load balancer's.
+No configuration needed on Render: the backend detects `RENDER=true` and reads the client IP 2 hops from the right of `X-Forwarded-For` (Cloudflare, then Render's proxy). Elsewhere, set `TRUSTED_PROXY_HOPS` to the number of proxies in front of the app.
 
 ## Limitations & honest notes
 

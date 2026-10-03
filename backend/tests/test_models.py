@@ -162,7 +162,9 @@ class TestWACC:
         r = compute_wacc(market_cap=800, total_debt=200, beta=1.2,
                          interest_expense=10, tax_rate=0.25)
         b = r["breakdown"]
-        re = 0.0418 + 1.2 * 0.0423
+        from app.config import WACC_INPUTS
+
+        re = float(WACC_INPUTS["risk_free_rate"]) + 1.2 * float(WACC_INPUTS["equity_risk_premium"])
         rd = 10 / 200
         assert r["wacc"] == pytest.approx(0.8 * re + 0.2 * rd * 0.75)
         assert b["weight_equity"] + b["weight_debt"] == pytest.approx(1.0)

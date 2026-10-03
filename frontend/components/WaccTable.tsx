@@ -67,8 +67,8 @@ export function WaccTable({ breakdown: b, equityOnly = false, currency }: WaccTa
       </div>
       <p className={`table-footnote${isStale(b.data_as_of) ? " tone-warn" : ""}`}>
         {isStale(b.data_as_of)
-          ? `Market inputs dated ${b.data_as_of} are more than six months old — verify against current rates.`
-          : `Market inputs as of ${b.data_as_of}.`}
+          ? `Oldest market input dated ${b.data_as_of} is more than six months old — each input's date is shown in its source; verify before relying on it.`
+          : `Oldest market input dated ${b.data_as_of}.`}
       </p>
     </div>
   );

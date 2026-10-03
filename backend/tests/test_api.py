@@ -213,3 +213,30 @@ def test_cold_ticker_budget_enforced_but_cached_tickers_stay_free(monkeypatch):
     r = c.get("/api/valuation/HRBR/full")  # second cold ticker within the hour
     assert r.status_code == 429
     assert "previously analysed" in r.json()["detail"].lower()
+
+
+def test_proxy_hops_default_detects_render(monkeypatch):
+    import app.main as main
+
+    monkeypatch.delenv("TRUSTED_PROXY_HOPS", raising=False)
+    monkeypatch.setenv("RENDER", "true")
+    assert main._default_proxy_hops() == 2
+    monkeypatch.delenv("RENDER")
+    assert main._default_proxy_hops() == 0
+    monkeypatch.setenv("TRUSTED_PROXY_HOPS", "1")
+    monkeypatch.setenv("RENDER", "true")
+    assert main._default_proxy_hops() == 1  # explicit setting wins
+
+
+def test_client_ip_on_render_ignores_spoofed_and_cloudflare_entries(monkeypatch):
+    import app.main as main
+    from starlette.requests import Request
+
+    monkeypatch.setattr(main, "TRUSTED_PROXY_HOPS", 2)
+    scope = {
+        "type": "http",
+        "headers": [(b"x-forwarded-for", b"6.6.6.6, 203.0.113.7, 172.70.1.1")],
+        "client": ("10.0.0.5", 1234),
+    }
+    # spoofed value from the client, real client (added by Cloudflare), CF edge (added by Render)
+    assert main._client_ip(Request(scope)) == "203.0.113.7"

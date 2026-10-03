@@ -44,7 +44,7 @@ const METHODS = [
 const GUARDRAILS = [
   { icon: TriangleAlert, title: "Sanity checks, surfaced", body: "Anomalous margins, out-of-range ratios and extreme divergence from the market are flagged in the report — never silently corrected." },
   { icon: Database, title: "Missing data is a disclosure", body: "Absent line items stay absent. Defaults are named, partial results are labelled, and a model that cannot run says why." },
-  { icon: Gauge, title: "Inputs carry dates", body: "Risk-free rate and equity risk premium are sourced from Damodaran and dated; quote timestamps and stale-data warnings are shown." },
+  { icon: Gauge, title: "Inputs carry dates", body: "The risk-free rate (US 10-year Treasury) and Damodaran's equity risk premium are dated; quote timestamps and stale-data warnings are shown." },
   { icon: ShieldCheck, title: "Built for scarce data", body: "Server-side keys, cached and de-duplicated provider requests, and bounded retries keep the data budget for real analysis." },
 ];
 
@@ -145,8 +145,8 @@ export default function HomePage() {
             <h2 id="trust-title" className="section-title">A number is only as good as what it admits.</h2>
           </div>
           <p className="lede">
-            Fundamentals and trailing ratios come from Financial Modeling Prep. Market inputs to the cost
-            of capital come from Aswath Damodaran (NYU Stern). Outputs are a starting point for analysis,
+            Fundamentals and trailing ratios come from Financial Modeling Prep. The cost of capital uses
+            the US 10-year Treasury yield and the implied equity risk premium of Aswath Damodaran (NYU Stern). Outputs are a starting point for analysis,
             not investment advice.
           </p>
         </Reveal>

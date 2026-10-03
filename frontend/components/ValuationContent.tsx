@@ -171,7 +171,7 @@ export function ValuationContent({ data, historical, sensitivity, reverseDcf }: 
             <dd className="figure">
               {formatRate(discountRate)} <span className="summary-sep">·</span> {formatRate(assumptions.terminal_growth_rate)}
             </dd>
-            <dd className="summary-note">CAPM, Damodaran inputs</dd>
+            <dd className="summary-note">CAPM, dated market inputs</dd>
           </div>
         </dl>
 

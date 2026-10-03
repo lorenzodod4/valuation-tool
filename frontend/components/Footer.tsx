@@ -30,7 +30,7 @@ export function Footer() {
             <h2>Data</h2>
             <ul>
               <li>Financial Modeling Prep</li>
-              <li>Damodaran (Rf, ERP)</li>
+              <li>US Treasury · Damodaran ERP</li>
               <li>Prices may be delayed</li>
             </ul>
           </div>

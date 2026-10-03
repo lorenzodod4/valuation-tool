@@ -177,7 +177,7 @@ export default function MethodologyPage() {
             </Formula>
             <DefaultsTable
               rows={[
-                ["Risk-free rate", "US 10-year Treasury, per Damodaran; dated in every report", "—"],
+                ["Risk-free rate", "US 10-year Treasury constant-maturity yield; dated in every report", "—"],
                 ["Equity risk premium", "Damodaran implied ERP; dated in every report", "—"],
                 ["Beta", "Company beta from the provider profile", "1.0 (market) when missing or ≤ 0"],
                 ["Pre-tax cost of debt", "|Interest expense| ÷ total debt, clamped 1–15%", "4.5%"],

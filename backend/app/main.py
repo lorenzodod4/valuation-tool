@@ -34,10 +34,20 @@ logger.info("Starting Valuation Tool API")
 RATE_LIMIT_REQUESTS = int(os.getenv("RATE_LIMIT_REQUESTS", "60"))
 RATE_LIMIT_WINDOW_SECONDS = int(os.getenv("RATE_LIMIT_WINDOW", "60"))
 
-# Number of reverse proxies in front of the app that append to X-Forwarded-For
-# (e.g. 1 on Render). 0 = use the socket peer address. Only the entries added by
-# trusted proxies are read, so a client cannot spoof its way past the limiter.
-TRUSTED_PROXY_HOPS = int(os.getenv("TRUSTED_PROXY_HOPS", "0"))
+# Number of trusted proxies that append to X-Forwarded-For. 0 = use the socket
+# peer address. Only entries added by trusted proxies are read, so a client
+# cannot spoof its way past the limiter. On Render, requests pass Cloudflare and
+# then Render's proxy ("<client>, <cloudflare edge>"), so the client is 2 hops
+# from the right; Render always sets RENDER=true, so this is detected without
+# any dashboard configuration.
+def _default_proxy_hops() -> int:
+    explicit = os.getenv("TRUSTED_PROXY_HOPS")
+    if explicit is not None and explicit.strip() != "":
+        return int(explicit)
+    return 2 if os.getenv("RENDER", "").lower() == "true" else 0
+
+
+TRUSTED_PROXY_HOPS = _default_proxy_hops()
 
 
 def _client_ip(request: Request) -> str:
