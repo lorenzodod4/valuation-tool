@@ -1,151 +1,177 @@
 import Link from "next/link";
-import { BorderGlow } from "@/components/BorderGlow";
-import { FeatureCards } from "@/components/FeatureCards";
-import { LandingHero } from "@/components/LandingHero";
-import { ScrollFade } from "@/components/ScrollFade";
+import { ArrowUpRight, Database, Gauge, ShieldCheck, TriangleAlert } from "lucide-react";
+import { DiscountFieldPoster } from "@/components/hero/DiscountFieldPoster";
+import { HeroVisual } from "@/components/hero/HeroVisual";
+import { ValuationDemo } from "@/components/landing/ValuationDemo";
+import { Reveal } from "@/components/Reveal";
 import { SearchBar } from "@/components/SearchBar";
-import { AUTHOR } from "@/lib/author";
 
-const WORKFLOW_STEPS = [
+const PIPELINE = [
+  { n: "01", title: "Ticker", body: "Any US-listed equity on NYSE or NASDAQ." },
+  { n: "02", title: "Statements", body: "Five years of income, balance sheet and cash flow, plus trailing ratios." },
+  { n: "03", title: "Assumptions", body: "Growth, margins, reinvestment and a CAPM discount rate, derived from history and shown." },
+  { n: "04", title: "Models", body: "DCF or DDM by sector, reverse DCF, peer multiples and a sensitivity grid." },
+  { n: "05", title: "Range", body: "One football field against the market price, exportable as a PDF." },
+];
+
+const METHODS = [
   {
-    num: "01",
-    title: "Data collection",
-    detail: "Pull public company statements, market data, peers, and profile context from available provider responses.",
+    name: "Discounted cash flow",
+    tag: "Operating companies",
+    formula: "EV = Σ FCFFₜ ⁄ (1+WACC)ᵗ + TV ⁄ (1+WACC)⁵",
+    body: "Five-year free cash flow to the firm with a Gordon-growth terminal value, then net debt to equity per share.",
   },
   {
-    num: "02",
-    title: "Validation",
-    detail: "Surface missing data, sector caveats, stale inputs, and sanity checks before the report is interpreted.",
+    name: "Dividend discount",
+    tag: "Banks, insurers, REITs",
+    formula: "P = Σ DPSₜ ⁄ (1+Rₑ)ᵗ + TV ⁄ (1+Rₑ)⁵",
+    body: "Selected automatically where free cash flow is not meaningful, discounted at the CAPM cost of equity.",
   },
   {
-    num: "03",
-    title: "Valuation",
-    detail: "Run DCF, WACC, trading comparables, sensitivity, and football-field framing without changing source assumptions silently.",
+    name: "Reverse DCF",
+    tag: "Market expectations",
+    formula: "solve g : DCF(g) = price",
+    body: "The uniform revenue growth the current share price already assumes — with the solver status disclosed.",
   },
   {
-    num: "04",
-    title: "Report",
-    detail: "Package the output into a readable dashboard with warnings, methodology notes, and PDF-ready structure.",
+    name: "Trading comparables",
+    tag: "Relative value",
+    formula: "value = median multiple × metric",
+    body: "P/E, EV/EBITDA and EV/Sales from a size-filtered peer set, with quartile ranges. Negative multiples are excluded.",
   },
 ];
 
-const FEATURE_POINTS = [
-  "Discounted cash flow",
-  "Reverse DCF context",
-  "Peer multiples",
-  "WACC transparency",
-  "Valuation ranges",
-  "Sanity checks",
-  "PDF report",
+const GUARDRAILS = [
+  { icon: TriangleAlert, title: "Sanity checks, surfaced", body: "Anomalous margins, out-of-range ratios and extreme divergence from the market are flagged in the report — never silently corrected." },
+  { icon: Database, title: "Missing data is a disclosure", body: "Absent line items stay absent. Defaults are named, partial results are labelled, and a model that cannot run says why." },
+  { icon: Gauge, title: "Inputs carry dates", body: "Risk-free rate and equity risk premium are sourced from Damodaran and dated; quote timestamps and stale-data warnings are shown." },
+  { icon: ShieldCheck, title: "Built for scarce data", body: "Server-side keys, cached and de-duplicated provider requests, and bounded retries keep the data budget for real analysis." },
 ];
 
 export default function HomePage() {
   return (
-    <main className="page-root landing-page">
-      <div className="glow-1" aria-hidden="true" />
-      <div className="glow-2" aria-hidden="true" />
-
-      {/* Hero — stays visible for much longer scroll distance */}
-      <ScrollFade fadeZone={0.2} drift={true} startFadeAfterScroll={1400}>
-        <LandingHero />
-      </ScrollFade>
-
-      <div className="landing-content">
-        {/* Workflow section */}
-        <ScrollFade fadeZone={0.2} drift={true}>
-          <section className="landing-section" aria-labelledby="workflow-title">
-            <div className="landing-section-header">
-              <span className="section-kicker">OPERATING MODEL</span>
-              <h2 id="workflow-title">From ticker to report, in a controlled sequence.</h2>
-              <p>
-                The product narrative is intentionally report-first: collect the
-                data, validate the inputs, calculate the valuation, and expose
-                the caveats.
-              </p>
+    <div className="landing">
+      <section className="hero" aria-labelledby="hero-title">
+        <div className="hero-glow" aria-hidden="true" />
+        <div className="container hero-grid">
+          <div className="hero-copy">
+            <p className="eyebrow fade-up" style={{ ["--i" as string]: 0 }}>
+              <span className="eyebrow-dot" aria-hidden="true" />
+              Equity valuation · first pass in seconds
+            </p>
+            <h1 id="hero-title" className="hero-title fade-up" style={{ ["--i" as string]: 1 }}>
+              What is a company worth <span className="serif-accent">today?</span>
+            </h1>
+            <p className="lede fade-up" style={{ ["--i" as string]: 2 }}>
+              Type a ticker. Get a discounted cash flow, peer multiples, a reverse DCF and a
+              football field — with every assumption on the page, and every caveat in plain sight.
+            </p>
+            <div id="analyze" className="hero-search fade-up" style={{ ["--i" as string]: 3 }}>
+              <SearchBar />
             </div>
-            <div className="workflow-grid">
-              {WORKFLOW_STEPS.map((step) => (
-                <article key={step.num} className="workflow-card">
-                  <span>{step.num}</span>
-                  <h3>{step.title}</h3>
-                  <p>{step.detail}</p>
-                </article>
-              ))}
-            </div>
-          </section>
-        </ScrollFade>
+          </div>
+          <div className="fade-up hero-visual-wrap" style={{ ["--i" as string]: 2 }}>
+            <HeroVisual poster={<DiscountFieldPoster />} />
+          </div>
+        </div>
+      </section>
 
-        {/* Features section */}
-        <ScrollFade fadeZone={0.2} drift={true}>
-          <section className="landing-section" aria-labelledby="features-title">
-            <div className="landing-section-header split">
-              <div>
-                <span className="section-kicker">ANALYST TOOLKIT</span>
-                <h2 id="features-title">Core valuation modules without decorative noise.</h2>
-              </div>
-              <p>
-                Each module is designed to support review, not hide uncertainty
-                behind a single score.
-              </p>
-            </div>
-            <FeatureCards useBorderGlow />
-            <div className="feature-strip" aria-label="Available valuation capabilities">
-              {FEATURE_POINTS.map((point) => (
-                <span key={point}>{point}</span>
-              ))}
-            </div>
-          </section>
-        </ScrollFade>
+      <section className="container landing-section" aria-labelledby="pipeline-title">
+        <Reveal className="section-head">
+          <p className="eyebrow"><span className="eyebrow-index">01</span> How it works</p>
+          <h2 id="pipeline-title" className="section-title">
+            From ticker to valuation range, in one controlled sequence.
+          </h2>
+        </Reveal>
+        <Reveal as="div" className="pipeline">
+          <ol>
+            {PIPELINE.map((step) => (
+              <li key={step.n} className="pipeline-step">
+                <span className="pipeline-n num">{step.n}</span>
+                <h3>{step.title}</h3>
+                <p>{step.body}</p>
+              </li>
+            ))}
+          </ol>
+        </Reveal>
+      </section>
 
-        {/* Trust section */}
-        <ScrollFade fadeZone={0.2} drift={true}>
-          <section className="landing-section trust-section" aria-labelledby="trust-title">
-            <div>
-              <span className="section-kicker">TRUST POSITIONING</span>
-              <h2 id="trust-title">Transparent enough to audit. Restrained enough for finance.</h2>
-            </div>
-            <div className="trust-grid">
-              <p>
-                The app uses publicly available provider data and presents
-                assumptions, caveats, stale inputs, and sector limitations in the
-                frontend report.
-              </p>
-              <p>
-                It is an educational valuation tool, not investment advice. A
-                serious analyst should still verify source data, adjust
-                assumptions, and evaluate qualitative risk.
-              </p>
-            </div>
-            <BorderGlow className="home-glow-card methodology-glow">
-              <Link href="/methodology" className="methodology-link-card">
-                <span>Read methodology</span>
-                <strong>Review DCF, WACC, multiples, ranges, limitations, and data sources.</strong>
-              </Link>
-            </BorderGlow>
-          </section>
-        </ScrollFade>
+      <section className="container landing-section" aria-labelledby="demo-title">
+        <Reveal className="section-head section-head-split">
+          <div>
+            <p className="eyebrow"><span className="eyebrow-index">02</span> Try the engine</p>
+            <h2 id="demo-title" className="section-title">
+              Move an assumption. <span className="serif-accent">Watch the value move.</span>
+            </h2>
+          </div>
+          <p className="lede">
+            The same five-year model that runs on live tickers, here on an illustrative company. Notice how
+            much of the value sits in the terminal year — and how little a discount-rate change it takes to
+            move it.
+          </p>
+        </Reveal>
+        <Reveal>
+          <ValuationDemo />
+        </Reveal>
+      </section>
 
-        {/* CTA section */}
-        <ScrollFade fadeZone={0.2} drift={false}>
-          <BorderGlow className="home-glow-card cta-glow">
-            <section className="landing-cta">
-              <span className="section-kicker">START ANALYSIS</span>
-              <h2>Run the first pass, then challenge the assumptions.</h2>
-              <div className="cta-search">
-                <SearchBar />
-              </div>
-            </section>
-          </BorderGlow>
-        </ScrollFade>
-      </div>
+      <section className="container landing-section" aria-labelledby="methods-title">
+        <Reveal className="section-head">
+          <p className="eyebrow"><span className="eyebrow-index">03</span> Methodology</p>
+          <h2 id="methods-title" className="section-title">Four lenses on one number.</h2>
+        </Reveal>
+        <div className="methods-grid">
+          {METHODS.map((m) => (
+            <Reveal key={m.name} className="method-card panel">
+              <span className="badge">{m.tag}</span>
+              <h3>{m.name}</h3>
+              <p className="method-formula mono">{m.formula}</p>
+              <p>{m.body}</p>
+            </Reveal>
+          ))}
+        </div>
+        <Reveal className="methods-link">
+          <Link href="/methodology" className="btn btn-secondary">
+            Read the full methodology
+            <ArrowUpRight size={15} strokeWidth={1.8} aria-hidden="true" />
+          </Link>
+        </Reveal>
+      </section>
 
-      <div className="footer-bar landing-footer">
-        <span>DATA · FINANCIAL MODELING PREP · DELAYED WHERE APPLICABLE</span>
-        <Link href="/about" className="footer-credit">
-          BUILT BY {AUTHOR.name.toUpperCase()}
-        </Link>
-        <span>EDUCATIONAL USE ONLY · NOT INVESTMENT ADVICE</span>
-      </div>
-    </main>
+      <section className="container landing-section" aria-labelledby="trust-title">
+        <Reveal className="section-head section-head-split">
+          <div>
+            <p className="eyebrow"><span className="eyebrow-index">04</span> Data &amp; guardrails</p>
+            <h2 id="trust-title" className="section-title">A number is only as good as what it admits.</h2>
+          </div>
+          <p className="lede">
+            Fundamentals and trailing ratios come from Financial Modeling Prep. Market inputs to the cost
+            of capital come from Aswath Damodaran (NYU Stern). Outputs are a starting point for analysis,
+            not investment advice.
+          </p>
+        </Reveal>
+        <div className="guardrails">
+          {GUARDRAILS.map(({ icon: Icon, title, body }) => (
+            <Reveal key={title} className="guardrail">
+              <Icon size={18} strokeWidth={1.6} aria-hidden="true" />
+              <h3>{title}</h3>
+              <p>{body}</p>
+            </Reveal>
+          ))}
+        </div>
+      </section>
+
+      <section className="container" aria-labelledby="cta-title">
+        <Reveal className="cta panel">
+          <div>
+            <h2 id="cta-title" className="section-title">
+              Start with a ticker. <span className="serif-accent">Then argue with it.</span>
+            </h2>
+            <p className="lede">US-listed equities · results in seconds · PDF report included.</p>
+          </div>
+          <SearchBar showSuggestions={false} label="Ticker symbol (call to action)" />
+        </Reveal>
+      </section>
+    </div>
   );
 }

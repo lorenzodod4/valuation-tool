@@ -1,100 +1,90 @@
-"use client";
-
-import { Fragment } from "react";
-import { TriangleAlert } from "lucide-react";
-import { formatCurrency } from "@/lib/format";
-import type { SectorWarning, SensitivityTable } from "@/types/valuation";
+import type { SensitivityTable } from "@/types/valuation";
+import { formatCurrency, formatPercent, formatRate } from "@/lib/format";
 
 interface SensitivityHeatmapProps {
   data: SensitivityTable;
-  sectorWarning?: SectorWarning | null;
+  currency?: string | null;
 }
 
-function getCellColor(
-  cellValue: number | null,
-  currentPrice: number | null,
-): string {
-  if (cellValue == null || currentPrice == null || currentPrice <= 0) {
-    return "transparent";
-  }
-  const delta = (cellValue - currentPrice) / currentPrice;
-  if (delta > 0.2) return "var(--bull-strong-bg)";
-  if (delta > 0.1) return "var(--bull-medium-bg)";
-  if (delta > 0) return "var(--bull-soft-bg)";
-  if (delta > -0.1) return "var(--bear-soft-bg)";
-  if (delta > -0.2) return "var(--bear-medium-bg)";
-  return "var(--bear-strong-bg)";
+function heat(value: number | null, price: number | null): string {
+  if (value == null || price == null || price <= 0) return "transparent";
+  const d = (value - price) / price;
+  if (d > 0.2) return "var(--heat-pos-3)";
+  if (d > 0.1) return "var(--heat-pos-2)";
+  if (d > 0) return "var(--heat-pos-1)";
+  if (d > -0.1) return "var(--heat-neg-1)";
+  if (d > -0.2) return "var(--heat-neg-2)";
+  return "var(--heat-neg-3)";
 }
 
-function fmtPct(n: number): string {
-  return `${(n * 100).toFixed(1)}%`;
-}
+const near = (a: number | undefined, b: number) => a != null && Math.abs(a - b) < 1e-9;
 
-export function SensitivityHeatmap({
-  data,
-  sectorWarning,
-}: SensitivityHeatmapProps) {
+export function SensitivityHeatmap({ data, currency }: SensitivityHeatmapProps) {
   const { wacc_values, terminal_growth_values, grid, current_price } = data;
 
   return (
-    <div className="sensitivity-heatmap">
-      {sectorWarning ? (
-        <div className="dcf-sector-warning" role="note">
-          <TriangleAlert
-            className="dcf-sector-warning-icon"
-            size={16}
-            strokeWidth={1.8}
-            aria-hidden="true"
-          />
-          <span>{sectorWarning.message}</span>
-        </div>
-      ) : null}
-      <div className="sensitivity-axis-top">WACC →</div>
-      <div className="sensitivity-body">
-        <div className="sensitivity-axis-left">↓ Terminal Growth</div>
-        <div className="sensitivity-grid-scroll">
-          <div className="sensitivity-grid">
-            <div className="sensitivity-corner" aria-hidden="true" />
-            {wacc_values.map((w) => (
-              <div
-                key={`wh-${w}`}
-                className="sensitivity-cell-header"
-              >
-                {fmtPct(w)}
-              </div>
-            ))}
-            {terminal_growth_values.map((tg, i) => (
-              <Fragment key={`row-${i}`}>
-                <div className="sensitivity-cell-header">{fmtPct(tg)}</div>
-                {wacc_values.map((_w, j) => {
-                  const value = grid[i]?.[j] ?? null;
-                  const bg = getCellColor(value, current_price);
+    <div className="sensitivity">
+      <div className="table-scroll">
+        <table className="data-table sensitivity-table">
+          <caption className="sr-only">
+            Value per share by terminal growth (rows) and WACC (columns); shading compares each value with the
+            market price of {formatCurrency(current_price, 2, currency)}.
+          </caption>
+          <thead>
+            <tr>
+              <th scope="col">
+                <span className="sens-axis">g ↓ · WACC →</span>
+              </th>
+              {wacc_values.map((w) => (
+                <th key={w} scope="col" className={`num${near(data.base_wacc, w) ? " is-base-col" : ""}`}>
+                  {formatRate(w)}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {terminal_growth_values.map((g, i) => (
+              <tr key={g}>
+                <th scope="row" className={`num${near(data.base_terminal_growth, g) ? " is-base-row" : ""}`}>
+                  {formatRate(g)}
+                </th>
+                {wacc_values.map((w, j) => {
+                  const v = grid[i]?.[j] ?? null;
+                  const isBase = near(data.base_wacc, w) && near(data.base_terminal_growth, g);
+                  const delta = v != null && current_price ? (v - current_price) / current_price : null;
                   return (
-                    <div
-                      key={`${i}-${j}`}
-                      className="sensitivity-cell"
-                      style={{ backgroundColor: bg }}
+                    <td
+                      key={w}
+                      className={`num sens-cell${isBase ? " is-base" : ""}`}
+                      style={{ background: heat(v, current_price) }}
                     >
-                      <div className="sensitivity-cell-data">
-                        {value == null ? "—" : formatCurrency(value)}
-                      </div>
-                    </div>
+                      <span className="sens-value">{v == null ? "n/a" : formatCurrency(v, 2, currency)}</span>
+                      <span className="sens-delta">{delta == null ? "" : formatPercent(delta, 0)}</span>
+                    </td>
                   );
                 })}
-              </Fragment>
+              </tr>
             ))}
-          </div>
-        </div>
+          </tbody>
+        </table>
       </div>
-
-      <div className="sensitivity-legend">
-        <div className="sensitivity-legend-bar" aria-hidden="true" />
-        <div className="sensitivity-legend-labels">
-          <span>Below market by 20%+</span>
-          <span>Around market</span>
-          <span>Above market by 20%+</span>
-        </div>
+      <div className="sens-legend" aria-hidden="true">
+        <span>Below market</span>
+        <i style={{ background: "var(--heat-neg-3)" }} />
+        <i style={{ background: "var(--heat-neg-2)" }} />
+        <i style={{ background: "var(--heat-neg-1)" }} />
+        <i style={{ background: "var(--heat-pos-1)" }} />
+        <i style={{ background: "var(--heat-pos-2)" }} />
+        <i style={{ background: "var(--heat-pos-3)" }} />
+        <span>Above market</span>
+        <span className="sens-legend-base">
+          <b /> Base case
+        </span>
       </div>
+      <p className="table-footnote">
+        Steps of ±1 percentage point in WACC and ±0.5 point in terminal growth. Cells where WACC ≤ growth are
+        undefined (n/a). Each cell shows the change versus the market price.
+      </p>
     </div>
   );
 }

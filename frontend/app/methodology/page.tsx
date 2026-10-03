@@ -1,461 +1,251 @@
 import type { Metadata } from "next";
-import { BorderGlow } from "@/components/BorderGlow";
+import Link from "next/link";
 import { AUTHOR } from "@/lib/author";
-import Folder from "@/components/Folder";
 
 export const metadata: Metadata = {
-  title: "Methodology — Valuation.io",
+  title: "Methodology",
   description:
-    "How this tool computes DCF, multiples, and WACC. Methodology, formulas, and sources.",
+    "How Valuation.io computes DCF, DDM, reverse DCF, WACC, trading comparables, sensitivity and valuation ranges — formulas, defaults, data sources and limitations.",
 };
 
 const SECTIONS = [
-  { id: "overview", label: "Overview" },
-  { id: "dcf", label: "DCF" },
-  { id: "ddm", label: "DDM" },
+  { id: "pipeline", label: "Pipeline" },
+  { id: "dcf", label: "Discounted cash flow" },
+  { id: "ddm", label: "Dividend discount" },
   { id: "reverse-dcf", label: "Reverse DCF" },
-  { id: "wacc", label: "WACC" },
-  { id: "multiples", label: "Multiples" },
-  { id: "ranges", label: "Ranges" },
+  { id: "wacc", label: "Discount rate" },
+  { id: "multiples", label: "Comparables" },
+  { id: "ranges", label: "Ranges & sensitivity" },
+  { id: "data", label: "Data & freshness" },
   { id: "limitations", label: "Limitations" },
-  { id: "sources", label: "Sources" },
 ];
 
-const MODEL_SUMMARY = [
-  { label: "Primary methods", value: "DCF / DDM" },
-  { label: "Forecast period", value: "5 years" },
-  { label: "Model selection", value: "Sector-aware" },
-  { label: "Reverse DCF", value: "Market-implied growth" },
-];
+function Formula({ children, note }: { children: string; note?: string }) {
+  return (
+    <figure className="doc-formula">
+      <pre className="mono">{children}</pre>
+      {note ? <figcaption>{note}</figcaption> : null}
+    </figure>
+  );
+}
 
-const METHODOLOGY_META = [
-  { label: "Provider", value: "Financial Modeling Prep" },
-  { label: "Coverage", value: "US-listed equities" },
-  { label: "Output", value: "Web + core PDF" },
-  { label: "Use", value: "Educational only" },
-];
-
-const FORMULAS = [
-  {
-    title: "Free cash flow to firm",
-    formula: "FCFF = NOPAT + D&A - CapEx - Delta WC",
-    note: "NOPAT is EBIT multiplied by one minus the effective tax rate.",
-  },
-  {
-    title: "Enterprise value",
-    formula: "EV = Sum(FCFFt / (1 + WACC)^t) + TV / (1 + WACC)^5",
-    note: "Terminal value uses the Gordon Growth Model after year 5.",
-  },
-  {
-    title: "Terminal value",
-    formula: "TV = FCFF5 x (1 + g) / (WACC - g)",
-    note: "Terminal growth is treated as a long-term nominal growth proxy.",
-  },
-  {
-    title: "WACC",
-    formula: "WACC = (E/V) x Re + (D/V) x Rd x (1 - t)",
-    note: "Cost of equity follows CAPM; cost of debt is derived from reported debt data where available.",
-  },
-];
+function DefaultsTable({ rows }: { rows: Array<[string, string, string]> }) {
+  return (
+    <div className="table-scroll">
+      <table className="data-table doc-table">
+        <thead>
+          <tr>
+            <th scope="col">Input</th>
+            <th scope="col">Rule</th>
+            <th scope="col">Fallback</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map(([a, b, c]) => (
+            <tr key={a}>
+              <th scope="row">{a}</th>
+              <td>{b}</td>
+              <td className="tone-muted">{c}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
 
 export default function MethodologyPage() {
   return (
-    <main className="methodology-page methodology-document">
-      <div className="glow-1" aria-hidden="true" />
-      <div className="glow-2" aria-hidden="true" />
+    <div className="container doc">
+      <header className="doc-header">
+        <p className="eyebrow">Methodology note</p>
+        <h1 className="doc-title">
+          How the numbers are made — <span className="serif-accent">and where they break.</span>
+        </h1>
+        <p className="lede">
+          Every figure in a report comes from the calculation flow described here. Defaults are named, fallbacks are
+          disclosed in the report, and nothing is adjusted silently.
+        </p>
+        <dl className="doc-meta">
+          <div><dt>Provider</dt><dd>Financial Modeling Prep</dd></div>
+          <div><dt>Coverage</dt><dd>US-listed equities</dd></div>
+          <div><dt>Horizon</dt><dd>5 years + terminal</dd></div>
+          <div><dt>Use</dt><dd>Educational only</dd></div>
+        </dl>
+      </header>
 
-      <div className="methodology-shell">
-        <aside className="methodology-index" aria-label="Methodology sections">
-          <div className="methodology-index-inner">
-            <Folder 
-              color="var(--accent)" 
-              defaultOpen
-              label="Methodology"
-              items={SECTIONS.map((section, index) => (
-                <a key={section.id} href={`#${section.id}`} className="folder-nav-item">
-                  <span className="folder-nav-num">{String(index + 1).padStart(2, "0")}</span>
-                  <span>{section.label}</span>
+      <div className="doc-layout">
+        <nav className="doc-toc" aria-label="On this page">
+          <p className="eyebrow">On this page</p>
+          <ol>
+            {SECTIONS.map((s, i) => (
+              <li key={s.id}>
+                <a href={`#${s.id}`}>
+                  <span className="num">{String(i + 1).padStart(2, "0")}</span>
+                  {s.label}
                 </a>
-              ))}
+              </li>
+            ))}
+          </ol>
+        </nav>
+
+        <article className="doc-body">
+          <section id="pipeline">
+            <h2>Pipeline</h2>
+            <p>
+              A report runs in four steps: <strong>collect</strong> the profile, five annual statements and trailing
+              ratios; <strong>derive</strong> assumptions from that history; <strong>value</strong> the company with
+              the model suited to its sector, plus peer multiples; and <strong>disclose</strong> every default,
+              sanity-check flag and missing input alongside the result.
+            </p>
+            <p>
+              Operating companies are valued with a discounted cash flow. Companies in the Financial Services and Real
+              Estate sectors are valued with a dividend discount model, because free cash flow is not a meaningful
+              measure of value for banks, insurers or REITs. Trading comparables run for every company.
+            </p>
+          </section>
+
+          <section id="dcf">
+            <h2>Discounted cash flow</h2>
+            <p>
+              Free cash flow to the firm is projected for five years and discounted at WACC; everything beyond year five
+              is captured by a Gordon-growth terminal value.
+            </p>
+            <Formula note="NOPAT = EBIT × (1 − tax rate). Each line is projected as a percentage of revenue.">
+              {"FCFFₜ = NOPATₜ + D&Aₜ − CapExₜ − ΔWCₜ"}
+            </Formula>
+            <Formula note="Equity value = EV − (total debt − cash); value per share = equity ÷ shares outstanding.">
+              {"EV = Σₜ₌₁⁵ FCFFₜ ⁄ (1 + WACC)ᵗ  +  TV ⁄ (1 + WACC)⁵\nTV = FCFF₅ × (1 + g) ⁄ (WACC − g)"}
+            </Formula>
+            <h3>Auto-derived assumptions</h3>
+            <DefaultsTable
+              rows={[
+                ["Revenue growth, Y1", "3-year historical CAGR, capped at 15%, floored at g + 1%", "g + 1% when history is insufficient"],
+                ["Growth, Y2–Y5", "Y2 moves 20% of the way to g; Y3–Y5 interpolate linearly; Y5 = g", "—"],
+                ["EBIT margin", "3-year average of operating income ÷ revenue", "15%"],
+                ["Tax rate", "Income tax ÷ pre-tax income, clamped 0–35%", "21%"],
+                ["D&A, CapEx, ΔWC", "3-year average % of revenue; clamped to 0–25%, 0–30%, ±15%", "5%, 4%, 2%"],
+                ["Terminal growth (g)", "2.5% long-run nominal growth", "—"],
+                ["WACC", "CAPM cost of equity blended with after-tax cost of debt", "9% if market cap is missing"],
+              ]}
             />
-            <div className="methodology-index-note">
-              <span>VALUATION ENGINE V1.0.4</span>
-              <a href={AUTHOR.linkedin}>Contact</a>
-            </div>
-          </div>
-        </aside>
-
-        <div className="methodology-content methodology-report">
-          <header className="methodology-hero" id="overview">
-            <div className="methodology-hero-copy">
-              <div className="kicker">
-                <span className="kicker-line" aria-hidden="true" />
-                <span className="kicker-text">METHODOLOGY · VALUATION.IO</span>
-                <span className="kicker-line" aria-hidden="true" />
-              </div>
-              <h1 className="about-title methodology-title">
-                Institutional methodology note for valuation outputs.
-              </h1>
-              <p className="methodology-intro">
-                This page documents how the frontend presents the valuation
-                engine: sector-aware DCF or DDM model selection, WACC or cost
-                of equity, trading comparables, valuation ranges, football
-                field visualization, and known model limitations. It describes
-                the current implementation and does not add unverified claims
-                beyond the available calculation flow.
-              </p>
-              <div className="methodology-meta-strip" aria-label="Methodology metadata">
-                {METHODOLOGY_META.map((item) => (
-                  <div key={item.label}>
-                    <span>{item.label}</span>
-                    <strong>{item.value}</strong>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            <div className="methodology-hero-aside" aria-label="Methodology summary">
-              <div className="methodology-hero-note">
-                <span className="section-kicker">MODEL SUMMARY</span>
-                <p>
-                  The goal is simple: keep the computation transparent, keep
-                  the assumptions visible, and keep the presentation readable.
-                </p>
-              </div>
-
-              <div className="method-summary-grid">
-                {MODEL_SUMMARY.map((item) => (
-                  <BorderGlow
-                    key={item.label}
-                    className="method-glow-card method-summary-glow"
-                    fillOpacity={0.1}
-                    glowRadius={18}
-                  >
-                    <div className="method-summary-card">
-                      <span>{item.label}</span>
-                      <strong>{item.value}</strong>
-                    </div>
-                  </BorderGlow>
-                ))}
-              </div>
-            </div>
-          </header>
-
-          <BorderGlow className="method-glow-card method-section-glow" fillOpacity={0.1}>
-            <section className="method-section method-overview-card">
-              <div>
-                <span className="method-section-num">PROCESS</span>
-                <h2 className="method-section-title">Valuation pipeline</h2>
-                <p className="method-section-subtitle">
-                  The report is designed to show calculated outputs together
-                  with assumptions and caveats.
-                </p>
-              </div>
-              <div className="method-pipeline">
-                {["Input data", "Assumption engine", "Method selection", "Disclosure layer"].map(
-                  (item, index) => (
-                    <div key={item} className="pipeline-step">
-                      <span>{String(index + 1).padStart(2, "0")}</span>
-                      <strong>{item}</strong>
-                    </div>
-                  ),
-                )}
-              </div>
-            </section>
-          </BorderGlow>
-
-          <section className="method-section" id="dcf">
-            <div className="method-section-num">01</div>
-            <h2 className="method-section-title">Discounted Cash Flow</h2>
-            <p className="method-section-subtitle">
-              Intrinsic value from projected free cash flows discounted at the
-              company&apos;s cost of capital.
+            <p>
+              Sanity checks flag negative or extreme margins, clamped cash-flow ratios, and intrinsic values more than 80%
+              below or 150% above the market price. They are informational: the model output is shown exactly as
+              computed, with the flag beside it.
             </p>
-            <div className="method-body">
-              <p>
-                The DCF model projects free cash flow to the firm over a
-                5-year window, then captures everything beyond year 5 with a
-                terminal value computed via the Gordon Growth Model. Each
-                year&apos;s cash flow is discounted at WACC to today&apos;s dollars.
-              </p>
-              <p>
-                Free cash flow to the firm is calculated as NOPAT plus
-                depreciation, minus capital expenditure, minus the change in
-                working capital. NOPAT is EBIT multiplied by one minus the tax
-                rate.
-              </p>
-              <div className="formula-grid">
-                {FORMULAS.slice(0, 3).map((item) => (
-                  <BorderGlow
-                    key={item.title}
-                    className="method-glow-card formula-glow"
-                    fillOpacity={0.1}
-                    glowRadius={18}
-                  >
-                    <article className="method-formula-card">
-                      <span>{item.title}</span>
-                      <code>{item.formula}</code>
-                      <p>{item.note}</p>
-                    </article>
-                  </BorderGlow>
-                ))}
-              </div>
-              <BorderGlow className="method-glow-card callout-glow" fillOpacity={0.1}>
-                <div className="method-callout">
-                  <strong>Auto-derived assumptions</strong>
-                  <p>
-                    Revenue growth starts from the company&apos;s 3-year historical
-                    CAGR, capped at 15% and floored at terminal growth plus 1%.
-                    Year 2 moves partway toward terminal growth, and years 3-5
-                    interpolate down to the terminal growth rate. EBIT margin is
-                    the 3-year average.
-                  </p>
-                </div>
-              </BorderGlow>
-              <p>
-                Tax rate is derived from latest income tax expense divided by
-                pre-tax income when available, clamped between 0% and 35%, with
-                21% used as the fallback. D&amp;A, CapEx, and working capital
-                changes are projected as percentages of revenue using the
-                3-year average ratio.
-              </p>
-              <p>
-                DCF is not the standard valuation methodology for banks,
-                insurance companies, asset managers, or REITs. For these
-                sectors, the tool can route to a Dividend Discount Model when
-                the API returns the required dividend history. If the required
-                inputs are incomplete, warnings remain visible in the report.
-              </p>
-            </div>
           </section>
 
-          <section className="method-section" id="ddm">
-            <div className="method-section-num">02</div>
-            <h2 className="method-section-title">Dividend Discount Model</h2>
-            <p className="method-section-subtitle">
-              Dividend-based valuation for financial institutions, REITs, and
-              other dividend-led cases where DCF is less appropriate.
+          <section id="ddm">
+            <h2>Dividend discount model</h2>
+            <Formula note="Rₑ is the CAPM cost of equity. DPS = common dividends paid ÷ shares outstanding.">
+              {"P = Σₜ₌₁⁵ DPSₜ ⁄ (1 + Rₑ)ᵗ  +  TV ⁄ (1 + Rₑ)⁵\nTV = DPS₅ × (1 + g) ⁄ (Rₑ − g)"}
+            </Formula>
+            <DefaultsTable
+              rows={[
+                ["Dividend growth", "CAGR of common dividends paid over up to five years, capped 0–10%", "2.5%"],
+                ["Terminal growth", "min(2%, 0.8 × dividend growth)", "—"],
+                ["Cost of equity", "Rf + β × ERP", "10% if unavailable"],
+              ]}
+            />
+            <p>
+              Companies with no positive dividend history return no DDM value — the report says so rather than
+              showing zero. Growth is measured on total dividends paid, so heavy buybacks can make per-share growth
+              differ from the estimate.
             </p>
-            <div className="method-body">
-              <p>
-                DDM projects dividends per share over a 5-year period, discounts
-                them at cost of equity, and adds a Gordon Growth terminal value.
-                It is used when the sector profile makes dividend streams more
-                analytically relevant than free cash flow to firm.
-              </p>
-              <div className="formula-grid single">
-                <BorderGlow className="method-glow-card formula-glow" fillOpacity={0.1}>
-                  <article className="method-formula-card">
-                    <span>Dividend value per share</span>
-                    <code>Value = Sum(DPSt / (1 + Re)^t) + TV / (1 + Re)^5</code>
-                    <p>
-                      Cost of equity follows CAPM. Terminal value uses the
-                      projected year-5 dividend and terminal dividend growth.
-                    </p>
-                  </article>
-                </BorderGlow>
-              </div>
-              <p>
-                DDM requires usable dividend history. Non-dividend-paying
-                companies, sparse statements, or incomplete provider responses
-                can make the model unavailable or less reliable.
-              </p>
-            </div>
           </section>
 
-          <section className="method-section" id="reverse-dcf">
-            <div className="method-section-num">03</div>
-            <h2 className="method-section-title">Reverse DCF</h2>
-            <p className="method-section-subtitle">
-              Market-implied growth solved from the current trading price.
+          <section id="reverse-dcf">
+            <h2>Reverse DCF</h2>
+            <p>
+              Holding WACC, terminal growth, margins, reinvestment and share count fixed, a bisection solver finds the
+              uniform five-year revenue growth rate at which the DCF value equals the market price (or a price you
+              choose), within a search range of −10% to +50%.
             </p>
-            <div className="method-body">
-              <p>
-                Reverse DCF keeps the model&apos;s WACC, terminal growth, margins,
-                reinvestment assumptions, and share count intact, then solves
-                for the uniform forecast-period revenue growth rate that makes
-                the DCF fair value equal the selected market price.
-              </p>
-              <div className="formula-grid single">
-                <BorderGlow className="method-glow-card formula-glow" fillOpacity={0.1}>
-                  <article className="method-formula-card">
-                    <span>Market-implied growth</span>
-                    <code>DCF fair value at solved growth = target market price</code>
-                    <p>
-                      The output is a reasonableness check: if the implied
-                      growth rate is materially above the base DCF growth path,
-                      the market is underwriting a stronger operating case than
-                      the automated model.
-                    </p>
-                  </article>
-                </BorderGlow>
-              </div>
-            </div>
+            <Formula>{"solve g ∈ [−10%, 50%]  such that  DCF(g, g, g, g, g) = price"}</Formula>
+            <p>
+              The solver status is always shown: <em>above range</em> means the price needs more than 50% growth (read
+              the result as a lower bound); <em>below range</em> means the price is justified even at −10%;{" "}
+              <em>unstable</em> means negative or erratic cash flows prevent a clean solution.
+            </p>
           </section>
 
-          <section className="method-section" id="wacc">
-            <div className="method-section-num">04</div>
-            <h2 className="method-section-title">WACC</h2>
-            <p className="method-section-subtitle">
-              Discount rate derived per ticker, with source transparency.
-            </p>
-            <div className="method-body">
-              <p>
-                Weighted Average Cost of Capital reflects the blended cost of
-                equity and debt, weighted by capital structure. It is the core
-                discount rate used to translate future cash flows into present
-                value.
-              </p>
-              <div className="formula-grid single">
-                <BorderGlow className="method-glow-card formula-glow" fillOpacity={0.1}>
-                  <article className="method-formula-card">
-                    <span>Weighted average cost of capital</span>
-                    <code>{FORMULAS[3].formula}</code>
-                    <p>{FORMULAS[3].note}</p>
-                  </article>
-                </BorderGlow>
-              </div>
-              <div className="assumption-grid">
-                {[
-                  ["Risk-free rate", "US 10-Year Treasury reference used by the model configuration where available."],
-                  ["Equity risk premium", "Damodaran-style implied ERP reference from the current model configuration."],
-                  ["Beta", "Company-specific beta sourced from Financial Modeling Prep where available."],
-                  ["Tax rate", "Derived from reported tax expense over pre-tax income and capped at 0%-35%."],
-                ].map(([label, text]) => (
-                  <BorderGlow key={label} className="method-glow-card assumption-glow" fillOpacity={0.1}>
-                    <div>
-                      <span>{label}</span>
-                      <p>{text}</p>
-                    </div>
-                  </BorderGlow>
-                ))}
-              </div>
-            </div>
+          <section id="wacc">
+            <h2>Discount rate</h2>
+            <Formula note="E = market capitalisation, D = total debt, V = E + D.">
+              {"WACC = (E ⁄ V) × Rₑ  +  (D ⁄ V) × R_d × (1 − t)\nRₑ = Rf + β × ERP"}
+            </Formula>
+            <DefaultsTable
+              rows={[
+                ["Risk-free rate", "US 10-year Treasury, per Damodaran; dated in every report", "—"],
+                ["Equity risk premium", "Damodaran implied ERP; dated in every report", "—"],
+                ["Beta", "Company beta from the provider profile", "1.0 (market) when missing or ≤ 0"],
+                ["Pre-tax cost of debt", "|Interest expense| ÷ total debt, clamped 1–15%", "4.5%"],
+              ]}
+            />
+            <p>Market inputs older than six months are flagged as stale in the report.</p>
           </section>
 
-          <section className="method-section" id="multiples">
-            <div className="method-section-num">05</div>
-            <h2 className="method-section-title">Trading Comparables</h2>
-            <p className="method-section-subtitle">
-              Market valuation derived from peer-group multiples applied to
-              the target&apos;s financial metrics.
+          <section id="multiples">
+            <h2>Trading comparables</h2>
+            <Formula note="EV-based values subtract net debt before dividing by shares outstanding.">
+              {"Implied equity = peer median P/E × net income\nImplied EV     = peer median EV/EBITDA × EBITDA   (or EV/Sales × revenue)\nPer share      = implied equity ⁄ shares"}
+            </Formula>
+            <p>
+              Peers come from the provider&apos;s peer list, keeping companies between 1% and 100× the target&apos;s
+              market cap and retaining the five largest; a curated list is used when none qualify, and you can supply
+              your own. Multiples are trailing-twelve-month where available, applied to latest fiscal-year metrics.
+              Negative or zero multiples are shown as <strong>NM</strong> (not meaningful) and excluded from medians and
+              quartiles.
             </p>
-            <div className="method-body">
-              <p>
-                The multiples method applies peer median trading multiples to
-                the target company&apos;s own metrics. The report computes
-                P/E, EV/EBITDA, EV/Sales, and P/B for the target and peers,
-                then converts implied market cap or enterprise value to
-                per-share value where applicable.
-              </p>
-              <pre className="method-formula">
-{`Implied Market Cap = Peer median P/E x Target Net Income
-Implied EV = Peer median EV/EBITDA x Target EBITDA
-Implied per-share = Implied Market Cap / Shares Outstanding`}
-              </pre>
-              <p>
-                Peers are sourced dynamically from Financial Modeling Prep and
-                filtered for size quality. Companies below 1% or above 100x
-                the target&apos;s market cap are excluded, then the top 5 by
-                market cap are retained.
-              </p>
-            </div>
           </section>
 
-          <section className="method-section" id="ranges">
-            <div className="method-section-num">06</div>
-            <h2 className="method-section-title">Valuation ranges and football field</h2>
-            <p className="method-section-subtitle">
-              Unified range presentation across methods, plotted against the
-              current market price.
+          <section id="ranges">
+            <h2>Ranges and sensitivity</h2>
+            <p>
+              The football field shows each method as a bar from low to high with the base case marked. The DCF range
+              sweeps WACC ±1 point and terminal growth ±0.5 point; peer ranges use the interquartile multiples. A method
+              without a valid range is drawn as a point, never as a bar from zero.
             </p>
-            <div className="method-body">
-              <p>
-                The football field plots DCF, P/E-based, EV/EBITDA-based, and
-                EV/Sales-based outputs on a horizontal range chart with a
-                current price marker. The purpose is to show whether market
-                price sits above, below, or inside the valuation reference
-                range.
-              </p>
-              <p>
-                The current implementation renders ranges where the valuation
-                response provides low/high values. DCF uses a narrow WACC and
-                terminal-growth corner sweep. Peer multiples use available
-                peer percentile ranges. When ranges are not available, the
-                chart degrades to a point estimate. A WACC and terminal-growth
-                sensitivity table is implemented on the valuation page when
-                the endpoint returns enough data.
-              </p>
-            </div>
+            <p>
+              The sensitivity grid is centred on the company&apos;s own base case — the centre cell always equals the
+              headline DCF value — and steps WACC by ±1 and ±2 points and terminal growth by ±0.5 and ±1 point. Cells
+              where WACC does not exceed growth are undefined.
+            </p>
           </section>
 
-          <BorderGlow className="method-glow-card method-section-glow warning-glow" fillOpacity={0.1}>
-            <section className="method-section method-limitations" id="limitations">
-              <div className="method-section-num">07</div>
-              <h2 className="method-section-title">Limitations and model risk</h2>
-              <ul>
-                <li>
-                  Auto-derived assumptions are starting points, not conclusions.
-                  A real analyst adjusts revenue growth, margins, reinvestment,
-                  and WACC to reflect a business-specific thesis.
-                </li>
-                <li>
-                  Free tier data from Financial Modeling Prep covers US-listed
-                  equities. Non-US listings require broader data access and are
-                  not supported here.
-                </li>
-                <li>
-                  Recent IPOs, distressed issuers, financial institutions, REITs,
-                  and companies with sparse statements can produce unreliable
-                  automated assumptions.
-                </li>
-                <li>
-                  Peer groups are algorithmically selected and size-filtered.
-                  They are not a substitute for curated sector comparables.
-                </li>
-                <li>
-                  Outputs are educational and not investment advice. They should
-                  be treated as one analytical input among many.
-                </li>
-              </ul>
-            </section>
-          </BorderGlow>
+          <section id="data">
+            <h2>Data and freshness</h2>
+            <p>
+              Fundamentals, trailing ratios and peer lists come from Financial Modeling Prep. Quotes and trailing ratios
+              are reused for up to one hour, annual statements and peer lists for up to 24 hours. If the provider is
+              unavailable, a recent cached copy may be served and the report is labelled accordingly. Prices may be
+              delayed.
+            </p>
+            <p>
+              API keys stay on the server. Concurrent requests for the same company share a single provider call, and
+              retries are bounded, so the limited data budget goes to real analysis.
+            </p>
+          </section>
 
-          <div className="flex flex-col md:flex-row gap-12 items-start" id="sources">
-            <section className="method-section method-sources flex-1">
-              <div className="method-section-num">08</div>
-              <h2 className="method-section-title">Data sources and status</h2>
-              <div className="source-grid">
-                {[
-                  ["Implemented", "DCF, DDM, reverse DCF, WACC/cost of equity, trading comparables, football field, PDF."],
-                  ["Provider data", "Financial Modeling Prep (FMP) /stable endpoints."],
-                  ["External refs", "Risk-free rate and ERP references documented in the current model configuration."],
-                ].map(([label, text]) => (
-                  <BorderGlow key={label} className="method-glow-card source-glow" fillOpacity={0.1}>
-                    <div>
-                      <span>{label}</span>
-                      <p className="text-xs">{text}</p>
-                    </div>
-                  </BorderGlow>
-                ))}
-              </div>
-            </section>
-          </div>
+          <section id="limitations" className="doc-limitations">
+            <h2>Limitations and model risk</h2>
+            <ul>
+              <li>Auto-derived assumptions are starting points. A real analysis adjusts growth, margins, reinvestment and discount rate to a business-specific thesis.</li>
+              <li>Coverage is limited to US-listed equities on the free data tier; non-US listings are not supported.</li>
+              <li>Recent IPOs, distressed issuers and companies with sparse statements can produce unreliable assumptions.</li>
+              <li>Peer groups are selected algorithmically and filtered by size; they are not a substitute for curated sector comparables.</li>
+              <li>Outputs are educational and not investment advice — one analytical input among many.</li>
+            </ul>
+          </section>
 
-          <div className="method-footer">
-            Methodology compiled by <strong>Lorenzo Dodero</strong>. Last
-            revised June 2026. Spotted an error or have feedback? Reach out via{" "}
-            <a
-              href={AUTHOR.linkedin}
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              LinkedIn
-            </a>
-            .
-          </div>
-        </div>
+          <p className="doc-credit">
+            Compiled by {AUTHOR.name}. Last revised October 2026. Spotted an error?{" "}
+            <a href={AUTHOR.linkedin} target="_blank" rel="noopener noreferrer">Get in touch</a> or{" "}
+            <Link href="/#analyze">run a valuation</Link>.
+          </p>
+        </article>
       </div>
-    </main>
+    </div>
   );
 }

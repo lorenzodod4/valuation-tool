@@ -1,0 +1,218 @@
+/* ==========================================================================
+   Design tokens — "The Discounting Instrument"
+   One source of truth for colour, type, space, radius, elevation and motion.
+   Dark is the signature theme; light ("paper") is a first-class equal.
+   Chart series hues are validated (CVD ΔE ≥ 9) per mode — see docs/DESIGN_SYSTEM.md.
+   ========================================================================== */
+
+:root {
+  /* Type families (populated by next/font in app/layout.tsx) */
+  --font-sans: var(--font-inter-tight), ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: var(--font-plex-mono), ui-monospace, "SFMono-Regular", Menlo, monospace;
+  --font-serif: var(--font-instrument-serif), "Iowan Old Style", Georgia, serif;
+
+  /* Type scale (1.250 major third, fluid at the display end) */
+  --text-2xs: 0.6875rem;  /* 11 — micro labels */
+  --text-xs: 0.75rem;     /* 12 */
+  --text-sm: 0.8125rem;   /* 13 */
+  --text-base: 0.9375rem; /* 15 */
+  --text-md: 1.0625rem;   /* 17 */
+  --text-lg: 1.25rem;     /* 20 */
+  --text-xl: 1.5625rem;   /* 25 */
+  --text-2xl: clamp(1.75rem, 1.3rem + 1.6vw, 2.25rem);
+  --text-3xl: clamp(2.1rem, 1.4rem + 2.6vw, 3.25rem);
+  --text-display: clamp(2.6rem, 1.3rem + 4.4vw, 4.9rem);
+
+  --leading-tight: 1.04;
+  --leading-snug: 1.22;
+  --leading-body: 1.55;
+  --tracking-display: -0.035em;
+  --tracking-tight: -0.018em;
+  --tracking-label: 0.08em;
+
+  /* Spacing (4px base) */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-10: 40px;
+  --space-12: 48px;
+  --space-16: 64px;
+  --space-20: 80px;
+  --space-24: 96px;
+  --space-32: 128px;
+  --gutter: clamp(16px, 4vw, 40px);
+  --page-max: 1240px;
+  --prose-max: 68ch;
+
+  /* Radius */
+  --radius-xs: 4px;
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+  --radius-xl: 20px;
+  --radius-pill: 999px;
+
+  /* Motion: three tiers — micro (state), major (layout/reveal), hero (scene) */
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+  --dur-micro: 140ms;
+  --dur-major: 520ms;
+  --dur-hero: 1200ms;
+
+  --header-h: 60px;
+}
+
+/* ---------- Light / paper ---------- */
+:root,
+:root[data-theme="light"] {
+  color-scheme: light;
+  --bg: #f3f2ee;
+  --bg-sunken: #eceae4;
+  --surface: #fbfaf7;
+  --surface-raised: #ffffff;
+  --surface-inset: #f1f0eb;
+  --line: rgba(17, 19, 23, 0.09);
+  --line-strong: rgba(17, 19, 23, 0.16);
+  --line-focus: #2f55e4;
+
+  --ink: #101216;
+  --ink-2: #3a3f48;
+  --ink-3: #626873;
+  --ink-4: #8b919b;
+
+  --signal: #2f55e4;          /* brand + primary series */
+  --signal-ink: #2445c4;      /* signal used as text (AA on surface) */
+  --signal-soft: rgba(47, 85, 228, 0.09);
+  --signal-line: rgba(47, 85, 228, 0.32);
+
+  --pos: #0c7a52;
+  --pos-soft: rgba(12, 122, 82, 0.09);
+  --neg: #b4352c;
+  --neg-soft: rgba(180, 53, 44, 0.08);
+  --warn: #9a6206;
+  --warn-soft: rgba(154, 98, 6, 0.09);
+
+  /* Categorical series (validated light set) */
+  --series-1: #2f55e4;
+  --series-2: #e0682b;
+  --series-3: #159a72;
+  --series-neutral: #8b919b;
+
+  /* Diverging heat (sensitivity) — value vs market */
+  --heat-pos-1: rgba(12, 122, 82, 0.08);
+  --heat-pos-2: rgba(12, 122, 82, 0.17);
+  --heat-pos-3: rgba(12, 122, 82, 0.28);
+  --heat-neg-1: rgba(180, 53, 44, 0.07);
+  --heat-neg-2: rgba(180, 53, 44, 0.15);
+  --heat-neg-3: rgba(180, 53, 44, 0.25);
+
+  --shadow-sm: 0 1px 2px rgba(16, 18, 22, 0.05);
+  --shadow-md: 0 1px 2px rgba(16, 18, 22, 0.04), 0 8px 24px -12px rgba(16, 18, 22, 0.14);
+  --shadow-lg: 0 2px 4px rgba(16, 18, 22, 0.04), 0 24px 60px -24px rgba(16, 18, 22, 0.22);
+
+  --hero-glow: radial-gradient(60% 55% at 72% 40%, rgba(47, 85, 228, 0.10), transparent 70%);
+  --grain-opacity: 0.025;
+}
+
+/* ---------- Dark / graphite ---------- */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --bg: #0b0d10;
+    --bg-sunken: #08090b;
+    --surface: #111418;
+    --surface-raised: #161a1f;
+    --surface-inset: #0e1114;
+    --line: rgba(232, 236, 242, 0.075);
+    --line-strong: rgba(232, 236, 242, 0.14);
+    --line-focus: #8ea2ff;
+
+    --ink: #eef0f3;
+    --ink-2: #b9bec7;
+    --ink-3: #868c97;
+    --ink-4: #5f6570;
+
+    --signal: #5b7bf5;
+    --signal-ink: #93a6ff;
+    --signal-soft: rgba(91, 123, 245, 0.12);
+    --signal-line: rgba(91, 123, 245, 0.4);
+
+    --pos: #3fbf8c;
+    --pos-soft: rgba(63, 191, 140, 0.11);
+    --neg: #f0776c;
+    --neg-soft: rgba(240, 119, 108, 0.1);
+    --warn: #e0ad52;
+    --warn-soft: rgba(224, 173, 82, 0.1);
+
+    --series-1: #5b7bf5;
+    --series-2: #da6a31;
+    --series-3: #1fa078;
+    --series-neutral: #6b717c;
+
+    --heat-pos-1: rgba(63, 191, 140, 0.09);
+    --heat-pos-2: rgba(63, 191, 140, 0.18);
+    --heat-pos-3: rgba(63, 191, 140, 0.3);
+    --heat-neg-1: rgba(240, 119, 108, 0.08);
+    --heat-neg-2: rgba(240, 119, 108, 0.16);
+    --heat-neg-3: rgba(240, 119, 108, 0.27);
+
+    --shadow-sm: 0 1px 0 rgba(255, 255, 255, 0.03) inset;
+    --shadow-md: 0 1px 0 rgba(255, 255, 255, 0.04) inset, 0 12px 32px -16px rgba(0, 0, 0, 0.7);
+    --shadow-lg: 0 1px 0 rgba(255, 255, 255, 0.05) inset, 0 30px 80px -30px rgba(0, 0, 0, 0.85);
+
+    --hero-glow: radial-gradient(55% 60% at 72% 42%, rgba(91, 123, 245, 0.16), transparent 70%);
+    --grain-opacity: 0.04;
+  }
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #0b0d10;
+  --bg-sunken: #08090b;
+  --surface: #111418;
+  --surface-raised: #161a1f;
+  --surface-inset: #0e1114;
+  --line: rgba(232, 236, 242, 0.075);
+  --line-strong: rgba(232, 236, 242, 0.14);
+  --line-focus: #8ea2ff;
+
+  --ink: #eef0f3;
+  --ink-2: #b9bec7;
+  --ink-3: #868c97;
+  --ink-4: #5f6570;
+
+  --signal: #5b7bf5;
+  --signal-ink: #93a6ff;
+  --signal-soft: rgba(91, 123, 245, 0.12);
+  --signal-line: rgba(91, 123, 245, 0.4);
+
+  --pos: #3fbf8c;
+  --pos-soft: rgba(63, 191, 140, 0.11);
+  --neg: #f0776c;
+  --neg-soft: rgba(240, 119, 108, 0.1);
+  --warn: #e0ad52;
+  --warn-soft: rgba(224, 173, 82, 0.1);
+
+  --series-1: #5b7bf5;
+  --series-2: #da6a31;
+  --series-3: #1fa078;
+  --series-neutral: #6b717c;
+
+  --heat-pos-1: rgba(63, 191, 140, 0.09);
+  --heat-pos-2: rgba(63, 191, 140, 0.18);
+  --heat-pos-3: rgba(63, 191, 140, 0.3);
+  --heat-neg-1: rgba(240, 119, 108, 0.08);
+  --heat-neg-2: rgba(240, 119, 108, 0.16);
+  --heat-neg-3: rgba(240, 119, 108, 0.27);
+
+  --shadow-sm: 0 1px 0 rgba(255, 255, 255, 0.03) inset;
+  --shadow-md: 0 1px 0 rgba(255, 255, 255, 0.04) inset, 0 12px 32px -16px rgba(0, 0, 0, 0.7);
+  --shadow-lg: 0 1px 0 rgba(255, 255, 255, 0.05) inset, 0 30px 80px -30px rgba(0, 0, 0, 0.85);
+
+  --hero-glow: radial-gradient(55% 60% at 72% 42%, rgba(91, 123, 245, 0.16), transparent 70%);
+  --grain-opacity: 0.04;
+}

@@ -1,338 +1,325 @@
 "use client";
 
-import { useState } from "react";
-import dynamic from "next/dynamic";
+import { useMemo, useState } from "react";
+import { TriangleAlert } from "lucide-react";
+import type { Async } from "@/lib/async";
 import type {
   FullValuation,
   HistoricalFinancials,
+  ImpliedValuation,
+  MultiplesResult,
   ReverseDCFResult,
   SensitivityTable,
 } from "@/types/valuation";
-import { BorderGlow } from "@/components/BorderGlow";
+import { RangeChart, type RangeRow } from "@/components/charts/RangeChart";
 import { CompanyProfileBlock } from "@/components/CompanyProfileBlock";
 import { DCFCard } from "@/components/DCFCard";
 import { DDMCard } from "@/components/DDMCard";
 import { ExportPDFButton } from "@/components/ExportPDFButton";
+import { HistoricalChart } from "@/components/HistoricalChart";
 import { ModelDiagnostics } from "@/components/ModelDiagnostics";
 import { MultiplesCard } from "@/components/MultiplesCard";
 import { ReverseDCFCard } from "@/components/ReverseDCFCard";
+import { SensitivityHeatmap } from "@/components/SensitivityHeatmap";
 import { ValuationTickerHeader } from "@/components/ValuationTickerHeader";
-import { formatCurrency, formatPercent } from "@/lib/format";
-
-// Lazy-load heavy chart components — Recharts + @react-pdf/renderer together
-// add ~500KB+ to the initial bundle.
-const FootballField = dynamic(
-  () => import("@/components/FootballField").then((m) => ({ default: m.FootballField })),
-  { ssr: false, loading: () => <div className="ff-container" /> },
-);
-
-const HistoricalChart = dynamic(
-  () => import("@/components/HistoricalChart").then((m) => ({ default: m.HistoricalChart })),
-  { ssr: false, loading: () => <div className="historical-chart-container" /> },
-);
-
-const SensitivityHeatmap = dynamic(
-  () => import("@/components/SensitivityHeatmap").then((m) => ({ default: m.SensitivityHeatmap })),
-  { ssr: false, loading: () => <div className="skeleton-card" style={{ height: 280 }} /> },
-);
-
-import type { FootballFieldMethod } from "@/components/FootballField";
+import { ReportNav } from "@/components/report/ReportNav";
+import { ReportSection } from "@/components/report/ReportSection";
+import { SectionState } from "@/components/report/SectionState";
+import { formatCurrency, formatPercent, formatRate, toneOf } from "@/lib/format";
 
 interface ValuationContentProps {
   data: FullValuation;
-  historical?: HistoricalFinancials | null;
-  reverseDcf?: ReverseDCFResult | null;
-  sensitivity?: SensitivityTable | null;
+  historical: Async<HistoricalFinancials>;
+  sensitivity: Async<SensitivityTable>;
+  reverseDcf: Async<ReverseDCFResult>;
 }
 
-export function ValuationContent({
-  data,
-  historical,
-  reverseDcf,
-  sensitivity,
-}: ValuationContentProps) {
-  const { profile, dcf, ddm, multiples, primary_model } = data;
-  const isDDM = primary_model === "ddm" || !!ddm;
-  const valuationModel = isDDM ? ddm : dcf;
-
-  // Report-level state: custom reverse DCF target and peer overrides.
-  // These flow down to interactive cards and back up to the PDF export.
-  const [activeReverseDcf, setActiveReverseDcf] = useState<ReverseDCFResult | null>(
-    reverseDcf ?? null,
-  );
-  const [activeMultiples, setActiveMultiples] = useState(multiples);
-  
-  const peers = multiples.peers_used;
-  const peerLabel =
-    peers.length > 0
-      ? `${peers.length} peer${peers.length === 1 ? "" : "s"} · ${peers.join(", ")}`
-      : "no peers available";
-
-  const methods: FootballFieldMethod[] = [];
-
-  // Use DDM or DCF valuation model
-  if (valuationModel?.per_share_value != null) {
-    // For DDM, assumptions_used might have different structure, but per_share_low/high pattern is same
-    const assumptions = valuationModel.assumptions_used as {
-      per_share_low?: number | null;
-      per_share_high?: number | null;
-    };
-    methods.push({
+function methodRows(data: FullValuation, multiples: MultiplesResult | null): RangeRow[] {
+  const isDDM = data.primary_model === "ddm";
+  const model = isDDM ? data.ddm : data.dcf;
+  const rows: RangeRow[] = [];
+  if (model?.per_share_value != null) {
+    const a = model.assumptions_used as { per_share_low?: number | null; per_share_high?: number | null };
+    rows.push({
       label: isDDM ? "DDM" : "DCF",
-      base: valuationModel.per_share_value,
-      low: assumptions.per_share_low ?? null,
-      high: assumptions.per_share_high ?? null,
-      color: "bull",
+      sublabel: isDDM ? "point estimate" : "±1% WACC, ±0.5% g",
+      base: model.per_share_value,
+      low: a.per_share_low ?? null,
+      high: a.per_share_high ?? null,
+      emphasis: true,
     });
   }
+  const iv = multiples?.implied_valuations;
+  const peer = (label: string, v: ImpliedValuation | null) => {
+    if (v?.implied_per_share == null) return;
+    rows.push({
+      label,
+      sublabel: "peer quartiles",
+      base: v.implied_per_share,
+      low: v.implied_per_share_low ?? null,
+      high: v.implied_per_share_high ?? null,
+    });
+  };
+  if (iv) {
+    peer("P/E", iv.pe_based);
+    peer("EV/EBITDA", iv.ev_ebitda_based);
+    peer("EV/Sales", iv.ev_sales_based);
+  }
+  return rows;
+}
 
-  const pe = multiples.implied_valuations.pe_based;
-  if (pe?.implied_per_share != null) {
-    methods.push({
-      label: "P/E",
-      base: pe.implied_per_share,
-      low: pe.implied_per_share_low ?? null,
-      high: pe.implied_per_share_high ?? null,
-      color: "accent",
-    });
-  }
-  const evEbitda = multiples.implied_valuations.ev_ebitda_based;
-  if (evEbitda?.implied_per_share != null) {
-    methods.push({
-      label: "EV/EBITDA",
-      base: evEbitda.implied_per_share,
-      low: evEbitda.implied_per_share_low ?? null,
-      high: evEbitda.implied_per_share_high ?? null,
-      color: "cyan",
-    });
-  }
-  const evSales = multiples.implied_valuations.ev_sales_based;
-  if (evSales?.implied_per_share != null) {
-    methods.push({
-      label: "EV/Sales",
-      base: evSales.implied_per_share,
-      low: evSales.implied_per_share_low ?? null,
-      high: evSales.implied_per_share_high ?? null,
-      color: "bear",
-    });
-  }
+export function ValuationContent({ data, historical, sensitivity, reverseDcf }: ValuationContentProps) {
+  const { profile, dcf, ddm } = data;
+  const isDDM = data.primary_model === "ddm";
+  const model = isDDM ? ddm : dcf;
+  const currency = profile.currency;
 
-  const currentPrice = valuationModel?.current_price ?? profile.price ?? null;
+  // Report-level interactive state; flows into the range chart and the PDF.
+  const [activeMultiples, setActiveMultiples] = useState<MultiplesResult | null>(data.multiples);
+  const [customReverse, setCustomReverse] = useState<ReverseDCFResult | null>(null);
 
-  const assumptions = valuationModel?.assumptions_used as {
+  const rows = useMemo(() => methodRows(data, activeMultiples), [data, activeMultiples]);
+  const price = profile.price ?? model?.current_price ?? null;
+
+  const intrinsic = model?.per_share_value ?? null;
+  const upsideMeaningful = intrinsic != null && intrinsic > 0;
+  const upside = upsideMeaningful ? model?.upside_pct ?? null : null;
+
+  const rangeValues = rows.flatMap((r) => [r.low ?? r.base, r.high ?? r.base]).filter(
+    (v): v is number => v != null && Number.isFinite(v) && v > 0,
+  );
+  const range = rangeValues.length > 0 ? { low: Math.min(...rangeValues), high: Math.max(...rangeValues) } : null;
+
+  const assumptions = (model?.assumptions_used ?? {}) as {
     wacc?: number;
     cost_of_equity?: number;
     terminal_growth_rate?: number;
-    dividend_growth_rate?: number;
   };
-  
   const discountRate = isDDM ? assumptions.cost_of_equity : assumptions.wacc;
-  const tg = assumptions.terminal_growth_rate;
-  
-  const modelSubtitle = isDDM
-    ? discountRate != null && tg != null
-      ? `Dividend projection · ${(discountRate * 100).toFixed(2)}% cost of equity · ${(tg * 100).toFixed(2)}% terminal growth`
-      : "Dividend projection"
-    : discountRate != null && tg != null
-      ? `5-year projection · ${(discountRate * 100).toFixed(2)}% WACC · ${(tg * 100).toFixed(2)}% terminal growth`
-      : "5-year projection";
-  const fmtRate = (value: number | null | undefined) =>
-    formatPercent(value).replace(/^\+/, "");
 
-  const hasHistorical = !!historical && historical.historical.length > 0;
-  const hasSensitivity = !!sensitivity;
-  const historicalSectionNum = "04";
-  const sensitivitySectionNum = hasHistorical ? "05" : "04";
-  const multiplesSectionNum = String(
-    4 + (hasHistorical ? 1 : 0) + (hasSensitivity ? 1 : 0),
-  ).padStart(2, "0");
-  const overviewCards = [
-    {
-      label: "Market price",
-      value: formatCurrency(currentPrice),
-      note: "Current quote",
-    },
-    {
-      label: isDDM ? "DDM value" : "DCF value",
-      value: formatCurrency(valuationModel?.per_share_value),
-      note: "Intrinsic estimate",
-    },
-    {
-      label: "Upside / downside",
-      value: formatPercent(valuationModel?.upside_pct),
-      note: "vs market price",
-    },
-    {
-      label: "Model context",
-      value: peers.length > 0 ? `${peers.length} peers` : "No peers",
-      note:
-        discountRate != null && tg != null
-          ? `${fmtRate(discountRate)} ${isDDM ? "Re" : "WACC"} · ${fmtRate(tg)} terminal growth`
-          : peerLabel,
-    },
-  ];
+  const notices = [...(data.notices ?? [])];
+  const sectorWarning = dcf?.sector_warning?.message;
+
+  const sections = [
+    { id: "range", label: "Range", show: true },
+    { id: "model", label: isDDM ? "DDM" : "DCF", show: true },
+    { id: "reverse", label: "Reverse DCF", show: !isDDM },
+    { id: "sensitivity", label: "Sensitivity", show: !isDDM },
+    { id: "history", label: "History", show: true },
+    { id: "comps", label: "Comparables", show: true },
+    { id: "diagnostics", label: "Diagnostics", show: true },
+    { id: "company", label: "Company", show: true },
+  ].filter((s) => s.show);
+  const indexOf = (id: string) => String(sections.findIndex((s) => s.id === id) + 1).padStart(2, "0");
+
+  const historicalData = historical.status === "ok" ? historical.data : null;
+  const sensitivityData = sensitivity.status === "ok" ? sensitivity.data : null;
+  const reverseData = reverseDcf.status === "ok" ? reverseDcf.data : null;
 
   return (
     <>
-      <ValuationTickerHeader profile={profile} />
-
-      <div className="valuation-overview">
-        <div className="valuation-overview-grid" aria-label="Valuation summary">
-          {overviewCards.map((card) => (
-            <div key={card.label} className="valuation-overview-card">
-              <span className="valuation-overview-label">{card.label}</span>
-              <strong className="valuation-overview-value">{card.value}</strong>
-              <span className="valuation-overview-note">{card.note}</span>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      <ModelDiagnostics
-        data={data}
-        historical={historical}
-        reverseDcf={reverseDcf}
-        sensitivity={sensitivity}
-        methodCount={methods.length}
-      />
-
-      <div className="export-pdf-row">
-        <div className="export-pdf-copy">
-          <span>Export</span>
-          <p>Core PDF: summary, valuation model, Reverse DCF, and comparables.</p>
-        </div>
-        <ExportPDFButton
-          valuation={data}
-          historical={historical}
-          reverseDcf={activeReverseDcf ?? reverseDcf}
-          sensitivity={sensitivity}
-          multiples={activeMultiples}
-        />
-      </div>
-
-      <div className="valuation-sections">
-        <BorderGlow className="report-glow-card valuation-section-glow" fillOpacity={0.1}>
-          <CompanyProfileBlock profile={profile} />
-        </BorderGlow>
-
-        <BorderGlow className="report-glow-card valuation-section-glow" fillOpacity={0.1}>
-          <section className="valuation-section">
-            <header className="section-header">
-              <div className="section-title-group">
-                <span className="section-num">01</span>
-                <span className="section-title">Football Field</span>
-              </div>
-              <span className="section-subtitle">
-                Valuation range across methods
-              </span>
-            </header>
-            <FootballField currentPrice={currentPrice} methods={methods} />
-          </section>
-        </BorderGlow>
-
-        <BorderGlow className="report-glow-card valuation-section-glow" fillOpacity={0.1}>
-          <section className="valuation-section">
-            <header className="section-header">
-              <div className="section-title-group">
-                <span className="section-num">02</span>
-                <span className="section-title">
-                  {isDDM ? "Dividend Discount Model" : "Discounted Cash Flow"}
-                </span>
-              </div>
-              <span className="section-subtitle">{modelSubtitle}</span>
-            </header>
-            {isDDM && ddm ? <DDMCard ddm={ddm} /> : dcf ? <DCFCard dcf={dcf} /> : null}
-          </section>
-        </BorderGlow>
-
-        <BorderGlow className="report-glow-card valuation-section-glow" fillOpacity={0.1}>
-          <section className="valuation-section">
-            <header className="section-header">
-              <div className="section-title-group">
-                <span className="section-num">03</span>
-                <span className="section-title">Reverse DCF</span>
-              </div>
-              <span className="section-subtitle">
-                What growth rate does the market imply at the current price?
-              </span>
-            </header>
-            <ReverseDCFCard
-              ticker={profile.symbol}
-              currentPrice={currentPrice}
-              initialData={activeReverseDcf ?? reverseDcf}
-              onResultChange={setActiveReverseDcf}
-            />
-          </section>
-        </BorderGlow>
-
-        {hasHistorical ? (
-          <BorderGlow className="report-glow-card valuation-section-glow" fillOpacity={0.1}>
-            <section className="valuation-section">
-              <header className="section-header">
-                <div className="section-title-group">
-                  <span className="section-num">{historicalSectionNum}</span>
-                  <span className="section-title">Historical Financials</span>
-                </div>
-                <span className="section-subtitle">
-                  Five-year trend of revenue, EBITDA, and net income — a sanity
-                  check before projecting forward.
-                </span>
-              </header>
-              <HistoricalChart data={historical!.historical} />
-            </section>
-          </BorderGlow>
-        ) : null}
-
-        {sensitivity ? (
-          <BorderGlow className="report-glow-card valuation-section-glow" fillOpacity={0.1}>
-            <section className="valuation-section">
-              <header className="section-header">
-                <div className="section-title-group">
-                  <span className="section-num">{sensitivitySectionNum}</span>
-                  <span className="section-title">Sensitivity Analysis</span>
-                </div>
-                <span className="section-subtitle">
-                  Per-share DCF value across a range of WACC and terminal growth
-                  assumptions. Green: implied value above current price. Red:
-                  below.
-                </span>
-              </header>
-              <SensitivityHeatmap
-                data={sensitivity}
-                sectorWarning={(dcf?.sector_warning || ddm) ? null : null}
-              />
-            </section>
-          </BorderGlow>
-        ) : null}
-
-        <BorderGlow className="report-glow-card valuation-section-glow" fillOpacity={0.1}>
-          <section className="valuation-section">
-            <header className="section-header">
-              <div className="section-title-group">
-                <span className="section-num">{multiplesSectionNum}</span>
-                <span className="section-title">Trading Comparables</span>
-              </div>
-              <span className="section-subtitle">{peerLabel}</span>
-            </header>
-            <MultiplesCard
+      <div className="container">
+        <ValuationTickerHeader
+          profile={profile}
+          actions={
+            <ExportPDFButton
+              valuation={data}
+              historical={historicalData}
+              reverseDcf={customReverse ?? reverseData}
+              sensitivity={sensitivityData}
               multiples={activeMultiples}
-              onPeersChange={setActiveMultiples}
             />
-          </section>
-        </BorderGlow>
+          }
+        />
+
+        <dl className="summary-strip" aria-label="Valuation summary">
+          <div className="summary-item">
+            <dt>Market price</dt>
+            <dd className="figure">{formatCurrency(price, 2, currency)}</dd>
+            <span className="summary-note">{profile.exchange ?? "Exchange n/a"} · may be delayed</span>
+          </div>
+          <div className="summary-item summary-item-primary">
+            <dt>{isDDM ? "DDM value" : "DCF value"} / share</dt>
+            <dd className="figure">{formatCurrency(intrinsic, 2, currency)}</dd>
+            <span className="summary-note">
+              {intrinsic == null
+                ? "Model unavailable — see notices"
+                : intrinsic <= 0
+                  ? "Non-positive: model not meaningful here"
+                  : "Intrinsic estimate, base case"}
+            </span>
+          </div>
+          <div className="summary-item">
+            <dt>Upside / downside</dt>
+            <dd className={`figure tone-${toneOf(upside)}`}>
+              {intrinsic != null && intrinsic <= 0 ? "NM" : formatPercent(upside)}
+            </dd>
+            <span className="summary-note">vs market price</span>
+          </div>
+          <div className="summary-item">
+            <dt>Range across methods</dt>
+            <dd className="figure">
+              {range ? `${formatCurrency(range.low, 0, currency)} – ${formatCurrency(range.high, 0, currency)}` : "—"}
+            </dd>
+            <span className="summary-note">
+              {rows.length} method{rows.length === 1 ? "" : "s"}
+              {rows.length > 0 && !range ? " · no positive values" : ""}
+            </span>
+          </div>
+          <div className="summary-item">
+            <dt>{isDDM ? "Cost of equity" : "WACC"} · terminal g</dt>
+            <dd className="figure">
+              {formatRate(discountRate)} <span className="summary-sep">·</span> {formatRate(assumptions.terminal_growth_rate)}
+            </dd>
+            <span className="summary-note">CAPM, Damodaran inputs</span>
+          </div>
+        </dl>
+
+        {notices.length > 0 || sectorWarning ? (
+          <div className="notice notice-warn report-notices" role="note">
+            <TriangleAlert size={16} strokeWidth={1.8} aria-hidden="true" />
+            <div>
+              <span className="notice-title">Read before interpreting</span>
+              <ul>
+                {sectorWarning ? <li>{sectorWarning}</li> : null}
+                {notices.map((n) => (
+                  <li key={n}>{n}</li>
+                ))}
+              </ul>
+            </div>
+          </div>
+        ) : null}
       </div>
 
-      <BorderGlow className="report-glow-card disclaimer-glow" fillOpacity={0.1}>
-        <div className="valuation-disclaimer">
-          <p className="disclaimer-text">
-            Important: this tool is for educational and informational purposes only.
-            The outputs are not investment advice or a recommendation to buy
-            or sell any security. Auto-derived assumptions are starting
-            points, not conclusions. Always consult licensed financial
-            professionals before making investment decisions.
-          </p>
-        </div>
-      </BorderGlow>
+      <ReportNav sections={sections} />
+
+      <div className="container report-body">
+        <ReportSection
+          id="range"
+          index={indexOf("range")}
+          title="Valuation range"
+          subtitle="Implied value per share by method against the market price. Bars are ranges; the tick is the base case."
+        >
+          <RangeChart
+            rows={rows}
+            marker={price != null && price > 0 ? { value: price, label: "Market" } : null}
+            format={(n, d) => formatCurrency(n, d, currency)}
+            caption="Valuation range by method"
+          />
+        </ReportSection>
+
+        <ReportSection
+          id="model"
+          index={indexOf("model")}
+          title={isDDM ? "Dividend discount model" : "Discounted cash flow"}
+          subtitle={
+            isDDM
+              ? "Five years of dividends per share plus a Gordon-growth terminal value, discounted at the cost of equity."
+              : "Five-year free cash flow to the firm plus a Gordon-growth terminal value, discounted at WACC."
+          }
+        >
+          {isDDM && ddm ? (
+            <DDMCard ddm={ddm} currency={currency} />
+          ) : dcf ? (
+            <DCFCard dcf={dcf} currency={currency} />
+          ) : (
+            <SectionState
+              state={{ status: "na", reason: notices.find((n) => /unavailable/i.test(n)) ?? "The model returned no result." }}
+              label={isDDM ? "DDM" : "DCF"}
+            />
+          )}
+        </ReportSection>
+
+        {!isDDM ? (
+          <ReportSection
+            id="reverse"
+            index={indexOf("reverse")}
+            title="Reverse DCF"
+            subtitle="The uniform five-year revenue growth the price already assumes, holding every other assumption fixed."
+          >
+            {reverseDcf.status === "ok" ? (
+              <ReverseDCFCard
+                ticker={profile.symbol}
+                currency={currency}
+                initialData={reverseDcf.data}
+                onResultChange={setCustomReverse}
+              />
+            ) : (
+              <SectionState state={reverseDcf} label="Reverse DCF" />
+            )}
+          </ReportSection>
+        ) : null}
+
+        {!isDDM ? (
+          <ReportSection
+            id="sensitivity"
+            index={indexOf("sensitivity")}
+            title="Sensitivity"
+            subtitle="Value per share across discount-rate and terminal-growth assumptions, centred on the base case."
+          >
+            {sensitivity.status === "ok" ? (
+              <SensitivityHeatmap data={sensitivity.data} currency={currency} />
+            ) : (
+              <SectionState state={sensitivity} label="Sensitivity" height={300} />
+            )}
+          </ReportSection>
+        ) : null}
+
+        <ReportSection
+          id="history"
+          index={indexOf("history")}
+          title="Historical financials"
+          subtitle="Reported annual figures — the base the projection starts from."
+        >
+          {historical.status === "ok" ? (
+            <HistoricalChart data={historical.data.historical} currency={historical.data.currency ?? currency} />
+          ) : (
+            <SectionState state={historical} label="Historical financials" height={320} />
+          )}
+        </ReportSection>
+
+        <ReportSection
+          id="comps"
+          index={indexOf("comps")}
+          title="Trading comparables"
+          subtitle="Peer median multiples applied to the company's own metrics."
+        >
+          {activeMultiples ? (
+            <MultiplesCard multiples={activeMultiples} onPeersChange={setActiveMultiples} currency={currency} />
+          ) : (
+            <SectionState
+              state={{ status: "na", reason: notices.find((n) => /comparables/i.test(n)) ?? "No comparable data." }}
+              label="Trading comparables"
+            />
+          )}
+        </ReportSection>
+
+        <ReportSection
+          id="diagnostics"
+          index={indexOf("diagnostics")}
+          title="Model diagnostics"
+          subtitle="What to check before relying on the numbers above."
+        >
+          <ModelDiagnostics
+            data={data}
+            multiples={activeMultiples}
+            historical={historical}
+            sensitivity={sensitivity}
+            reverseDcf={reverseDcf}
+            methodCount={rows.length}
+          />
+        </ReportSection>
+
+        <ReportSection id="company" index={indexOf("company")} title="Company profile">
+          <CompanyProfileBlock profile={profile} />
+        </ReportSection>
+
+        <p className="report-disclaimer">
+          Educational and informational use only — not investment advice or a recommendation to buy or sell any
+          security. Auto-derived assumptions are starting points, not conclusions. Verify source data and apply
+          your own judgment.
+        </p>
+      </div>
     </>
   );
 }

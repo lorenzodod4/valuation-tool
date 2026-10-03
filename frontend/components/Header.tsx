@@ -1,96 +1,49 @@
 "use client";
 
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
-import { CandleLogo } from "@/components/CandleLogo";
+import { BrandMark } from "@/components/BrandMark";
 import { ThemeToggle } from "@/components/ThemeToggle";
 
-function pad(n: number): string {
-  return String(n).padStart(2, "0");
-}
-
-function formatTimestamp(date: Date): string {
-  const dd = pad(date.getDate());
-  const mm = pad(date.getMonth() + 1);
-  const yy = String(date.getFullYear()).slice(-2);
-  const hh = pad(date.getHours());
-  const mn = pad(date.getMinutes());
-  const ss = pad(date.getSeconds());
-  let tz = "";
-  try {
-    const parts = new Intl.DateTimeFormat("en-US", {
-      timeZoneName: "short",
-    }).formatToParts(date);
-    tz = parts.find((p) => p.type === "timeZoneName")?.value ?? "";
-  } catch {
-    tz = "";
-  }
-  return `${dd}.${mm}.${yy} · ${hh}:${mn}:${ss}${tz ? " " + tz : ""}`;
-}
+const NAV = [
+  { href: "/methodology", label: "Methodology", optional: false },
+  { href: "/about", label: "About", optional: true },
+];
 
 export function Header() {
-  // Empty initial state keeps SSR and first client render in sync; the timestamp
-  // populates after mount so there's no hydration mismatch on the live clock.
-  const [stamp, setStamp] = useState<string>("");
+  const pathname = usePathname();
+  const [scrolled, setScrolled] = useState(false);
 
   useEffect(() => {
-    const update = () => setStamp(formatTimestamp(new Date()));
-    update();
-    const id = window.setInterval(update, 1000);
-    return () => window.clearInterval(id);
+    const onScroll = () => setScrolled(window.scrollY > 8);
+    onScroll();
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
   }, []);
 
   return (
-    <header className="app-header">
-      <div className="app-header-left">
-        <Link href="/" className="brand-link">
-          <CandleLogo size={{ width: 26, height: 20 }} />
-          <span className="brand-name">
+    <header className="site-header" data-scrolled={scrolled}>
+      <div className="container site-header-inner">
+        <Link href="/" className="brand" aria-label="Valuation.io home">
+          <BrandMark />
+          <span>
             Valuation<span className="brand-suffix">.io</span>
           </span>
         </Link>
-
-        <div className="ticker-bar">
-          <div className="ticker-cell">
-            <span className="t-label">SPX</span>
-            <span className="t-up">5847.32</span>
-            <span className="t-up t-delta">+0.42</span>
-          </div>
-          <div className="ticker-cell">
-            <span className="t-label">NDX</span>
-            <span className="t-up">20418</span>
-            <span className="t-up t-delta">+0.71</span>
-          </div>
-          <div className="ticker-cell">
-            <span className="t-label">VIX</span>
-            <span className="t-down">14.82</span>
-          </div>
-          <div className="ticker-cell">
-            <span className="t-label">10Y</span>
-            <span className="t-neutral">4.231</span>
-          </div>
-        </div>
-      </div>
-
-      <div className="app-header-right">
-        <span
-          aria-label="Current time"
-          suppressHydrationWarning
-          className="header-timestamp"
-        >
-          {stamp}
-        </span>
-        <Link href="/methodology" className="nav-link">
-          Methodology
-        </Link>
-        <Link href="/about" className="nav-link">
-          About
-        </Link>
-        <ThemeToggle />
-        <span className="live-pill" aria-label="Delayed market reference signal">
-          <span className="live-dot" aria-hidden="true" />
-          DELAYED REF
-        </span>
+        <nav className="site-nav" aria-label="Primary">
+          {NAV.map((item) => (
+            <Link
+              key={item.href}
+              href={item.href}
+              className={`nav-link${item.optional ? " nav-link-optional" : ""}`}
+              aria-current={pathname === item.href ? "page" : undefined}
+            >
+              {item.label}
+            </Link>
+          ))}
+          <ThemeToggle />
+        </nav>
       </div>
     </header>
   );

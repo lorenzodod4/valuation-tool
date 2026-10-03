@@ -25,7 +25,9 @@ logger.info("Starting Valuation Tool API")
 
 
 # Simple in-memory rate limiter: max N requests per IP in a sliding window.
-RATE_LIMIT_REQUESTS = int(os.getenv("RATE_LIMIT_REQUESTS", "20"))
+# One report page issues four requests; cached responses cost no provider
+# quota, so the limit guards against abuse rather than metering normal use.
+RATE_LIMIT_REQUESTS = int(os.getenv("RATE_LIMIT_REQUESTS", "60"))
 RATE_LIMIT_WINDOW_SECONDS = int(os.getenv("RATE_LIMIT_WINDOW", "60"))
 
 # Number of reverse proxies in front of the app that append to X-Forwarded-For
@@ -138,6 +140,7 @@ def create_app() -> FastAPI:
         allow_credentials=False,
         allow_methods=["GET", "POST", "OPTIONS"],
         allow_headers=["Content-Type"],
+        expose_headers=["Retry-After"],
     )
 
     application.include_router(valuation.router)

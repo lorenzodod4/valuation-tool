@@ -20,8 +20,8 @@ const PDFLinkInner = dynamic(
   {
     ssr: false,
     loading: () => (
-      <span className="export-pdf-button export-pdf-button-loading">
-        Loading PDF…
+      <span className="btn btn-secondary" aria-disabled="true">
+        Preparing PDF…
       </span>
     ),
   },

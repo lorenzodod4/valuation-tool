@@ -1,322 +1,136 @@
 "use client";
 
-import { type FormEvent, useEffect, useState } from "react";
+import { type FormEvent, useId, useState } from "react";
 import { Calculator, RotateCcw } from "lucide-react";
 import type { ReverseDCFResult } from "@/types/valuation";
 import { fetchReverseDCF } from "@/lib/api";
-import { formatCurrency, formatPercent } from "@/lib/format";
+import { formatCurrency, formatPercent, formatRate, toneOf } from "@/lib/format";
 
 interface ReverseDCFCardProps {
   ticker: string;
-  currentPrice?: number | null;
-  initialData?: ReverseDCFResult | null;
-  onResultChange?: (result: ReverseDCFResult) => void;
+  currency?: string | null;
+  initialData: ReverseDCFResult;
+  onResultChange?: (result: ReverseDCFResult | null) => void;
 }
 
-function pctFmt(n: number | null | undefined, decimals: number = 2): string {
-  if (n == null || !Number.isFinite(n)) return "—";
-  return `${(n * 100).toFixed(decimals)}%`;
-}
+const STATUS: Record<string, { label: string; badge: string; note: string }> = {
+  solved: { label: "Solved", badge: "badge-pos", note: "The solver found a growth rate inside its search range." },
+  above_range: { label: "Above range", badge: "badge-warn", note: "The price needs more growth than the 50% ceiling — read the rate as a lower bound." },
+  below_range: { label: "Below range", badge: "badge-warn", note: "The price is justified even at the −10% floor — the valuation is not growth-constrained." },
+  unstable: { label: "Unstable", badge: "badge-neg", note: "Cash flows do not produce a clean growth-to-value relationship; the rate shown is the base assumption, not a solution." },
+};
 
-export function ReverseDCFCard({
-  ticker,
-  currentPrice,
-  initialData = null,
-  onResultChange,
-}: ReverseDCFCardProps) {
-  const requestKey = `${ticker}:${currentPrice ?? "market"}`;
-  const defaultTarget = currentPrice ?? initialData?.target_price ?? null;
-  const defaultTargetText = defaultTarget != null ? defaultTarget.toFixed(2) : "";
-  const [targetState, setTargetState] = useState({
-    key: requestKey,
-    value: defaultTargetText,
-  });
-  const targetInput =
-    targetState.key === requestKey ? targetState.value : defaultTargetText;
-  const [inputErrorState, setInputErrorState] = useState<{
-    key: string;
-    message: string | null;
-  }>({ key: "", message: null });
-  const inputError =
-    inputErrorState.key === requestKey ? inputErrorState.message : null;
-  const [fetchState, setFetchState] = useState<{
-    key: string;
-    data: ReverseDCFResult | null;
-    error: string | null;
-  }>({
-    key: initialData ? requestKey : "",
-    data: null,
-    error: null,
-  });
-  const [customState, setCustomState] = useState<{
-    key: string;
-    data: ReverseDCFResult | null;
-    error: string | null;
-    loading: boolean;
-  }>({
-    key: "",
-    data: null,
-    error: null,
-    loading: false,
-  });
-  const activeCustomState =
-    customState.key === requestKey
-      ? customState
-      : { key: "", data: null, error: null, loading: false };
+export function ReverseDCFCard({ ticker, currency, initialData, onResultChange }: ReverseDCFCardProps) {
+  const inputId = useId();
+  const [custom, setCustom] = useState<ReverseDCFResult | null>(null);
+  const [input, setInput] = useState(initialData.target_price.toFixed(2));
+  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
 
-  useEffect(() => {
-    if (initialData) {
+  const data = custom ?? initialData;
+  const status = STATUS[data.solver_status] ?? STATUS.unstable;
+  const gap = data.base_assumptions_growth != null ? data.implied_growth_rate - data.base_assumptions_growth : null;
+
+  async function submit(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    const target = Number(input);
+    if (!Number.isFinite(target) || target <= 0 || target > 10_000_000) {
+      setError("Enter a positive price.");
       return;
     }
-
-    let cancelled = false;
-
-    fetchReverseDCF(ticker, currentPrice ?? undefined)
-      .then((result) => {
-        if (!cancelled) {
-          setFetchState({ key: requestKey, data: result, error: null });
-        }
-      })
-      .catch((err) => {
-        if (!cancelled) {
-          setFetchState({
-            key: requestKey,
-            data: null,
-            error: err instanceof Error ? err.message : "Failed to load reverse DCF",
-          });
-        }
-      });
-
-    return () => { cancelled = true; };
-  }, [ticker, currentPrice, initialData, requestKey]);
-
-  const fetchedForCurrentRequest = fetchState.key === requestKey;
-  const baseData = initialData ?? (fetchedForCurrentRequest ? fetchState.data : null);
-  const data = activeCustomState.data ?? baseData;
-  const error =
-    activeCustomState.error ??
-    (initialData ? null : fetchedForCurrentRequest ? fetchState.error : null);
-  const loading =
-    !activeCustomState.data &&
-    !initialData &&
-    (!fetchedForCurrentRequest || (fetchState.data == null && fetchState.error == null));
-
-  async function handleTargetSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const parsed = Number(targetInput);
-    if (!Number.isFinite(parsed) || parsed <= 0) {
-      setInputErrorState({
-        key: requestKey,
-        message: "Enter a positive target price.",
-      });
-      return;
-    }
-
-    setInputErrorState({ key: requestKey, message: null });
-    setCustomState((prev) => ({
-      ...prev,
-      key: requestKey,
-      error: null,
-      loading: true,
-    }));
+    setError(null);
+    setLoading(true);
     try {
-      const result = await fetchReverseDCF(ticker, parsed);
-      setCustomState({ key: requestKey, data: result, error: null, loading: false });
+      const result = await fetchReverseDCF(ticker, target);
+      setCustom(result);
       onResultChange?.(result);
-    } catch (err: unknown) {
-      setCustomState({
-        key: requestKey,
-        data: null,
-        error: err instanceof Error ? err.message : "Failed to run reverse DCF",
-        loading: false,
-      });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Reverse DCF failed.");
+    } finally {
+      setLoading(false);
     }
   }
 
-  function resetTarget() {
-    setTargetState({ key: requestKey, value: defaultTargetText });
-    setInputErrorState({ key: requestKey, message: null });
-    setCustomState({ key: "", data: null, error: null, loading: false });
+  function reset() {
+    setCustom(null);
+    setInput(initialData.target_price.toFixed(2));
+    setError(null);
+    onResultChange?.(null);
   }
-
-  if (loading) {
-    return (
-      <div className="reverse-dcf-loading">
-        <div className="skeleton-card" style={{ height: 200 }} />
-      </div>
-    );
-  }
-
-  if (!data) {
-    return (
-      <div className="reverse-dcf-error">
-        <p>Reverse DCF unavailable: {error || "No data"}</p>
-      </div>
-    );
-  }
-
-  const impliedGrowth = data.implied_growth_rate;
-  const baseGrowth = data.base_assumptions_growth;
-  const marginOfSafety = data.margin_of_safety;
-
-  const growthDiff = baseGrowth != null ? impliedGrowth - baseGrowth : null;
-  const solverStatus = data.solver_status ?? "solved";
-  const solverTone =
-    solverStatus === "solved"
-      ? "var(--bull)"
-      : solverStatus === "unstable" || solverStatus === "above_range"
-        ? "var(--bear)"
-        : "var(--amber)";
-  const solverLabel = solverStatus.replace(/_/g, " ");
-
-  // Color coding
-  const impliedColor =
-    impliedGrowth > 0.15
-      ? "var(--bear)"
-      : impliedGrowth > 0.08
-        ? "var(--accent)"
-        : "var(--bull)";
-
-  const marginColor =
-    marginOfSafety == null
-      ? "var(--text-primary)"
-      : marginOfSafety > 0
-        ? "var(--bull)"
-        : "var(--bear)";
 
   return (
-    <div className="reverse-dcf-card">
-      <div className="reverse-dcf-header">
-        <p className="reverse-dcf-subtitle">
-          What growth rate is the market pricing in at{" "}
-          <strong>{formatCurrency(data.target_price ?? currentPrice)}</strong>?
+    <div className="model-card">
+      <dl className="kpi-row">
+        <div className="kpi">
+          <dt>Implied revenue growth</dt>
+          <dd className="figure">{formatRate(data.implied_growth_rate, 1)}</dd>
+          <span className="kpi-note">uniform, Y1–Y5</span>
+        </div>
+        <div className="kpi">
+          <dt>Model base growth (Y1)</dt>
+          <dd className="figure">{formatRate(data.base_assumptions_growth, 1)}</dd>
+          <span className="kpi-note">
+            Gap <span className="num">{gap == null ? "—" : `${formatPercent(gap).replace("%", "")} pts`}</span>
+          </span>
+        </div>
+        <div className="kpi">
+          <dt>Price tested</dt>
+          <dd className="figure">{formatCurrency(data.target_price, 2, currency)}</dd>
+          <span className="kpi-note">{custom ? "Custom target" : "Market price"}</span>
+        </div>
+        <div className="kpi">
+          <dt>Base DCF vs price</dt>
+          <dd className={`figure tone-${toneOf(data.margin_of_safety)}`}>{formatPercent(data.margin_of_safety)}</dd>
+          <span className="kpi-note">{formatCurrency(data.base_fair_value, 2, currency)} base value</span>
+        </div>
+      </dl>
+
+      <div className="reverse-status">
+        <span className={`badge ${status.badge}`}>{status.label}</span>
+        <p>
+          {status.note} {data.interpretation}
         </p>
-        <form onSubmit={handleTargetSubmit} className="reverse-dcf-form">
-          <label className="reverse-dcf-input-label" htmlFor="reverse-target-price">
-            Target price
-          </label>
+      </div>
+
+      <form className="inline-form" onSubmit={submit}>
+        <div className="field">
+          <label className="field-label" htmlFor={inputId}>Test another price ({currency ?? "USD"})</label>
           <input
-            id="reverse-target-price"
+            id={inputId}
+            className="input num"
             type="number"
+            inputMode="decimal"
             min="0.01"
             step="0.01"
-            inputMode="decimal"
-            value={targetInput}
-            onChange={(event) => {
-              setTargetState({ key: requestKey, value: event.target.value });
-              if (inputError) {
-                setInputErrorState({ key: requestKey, message: null });
-              }
+            value={input}
+            aria-invalid={Boolean(error)}
+            onChange={(e) => {
+              setInput(e.target.value);
+              if (error) setError(null);
             }}
-            className="reverse-dcf-input"
-            disabled={activeCustomState.loading}
+            disabled={loading}
           />
-          <button
-            type="submit"
-            className="reverse-dcf-action"
-            disabled={activeCustomState.loading}
-          >
-            <Calculator size={14} strokeWidth={1.8} aria-hidden="true" />
-            {activeCustomState.loading ? "Running" : "Run"}
+        </div>
+        <button type="submit" className="btn btn-primary" disabled={loading}>
+          <Calculator size={14} strokeWidth={1.8} aria-hidden="true" />
+          {loading ? "Solving…" : "Solve"}
+        </button>
+        {custom ? (
+          <button type="button" className="btn btn-ghost" onClick={reset} disabled={loading}>
+            <RotateCcw size={14} strokeWidth={1.8} aria-hidden="true" /> Market price
           </button>
-          {activeCustomState.data ? (
-            <button
-              type="button"
-              className="reverse-dcf-action reverse-dcf-action-secondary"
-              onClick={resetTarget}
-              disabled={activeCustomState.loading}
-            >
-              <RotateCcw size={14} strokeWidth={1.8} aria-hidden="true" />
-              Reset
-            </button>
-          ) : null}
-        </form>
-        {inputError ? (
-          <p className="reverse-dcf-form-error" role="alert">
-            {inputError}
-          </p>
         ) : null}
-        {activeCustomState.error ? (
-          <p className="reverse-dcf-form-error" role="alert">
-            {activeCustomState.error}
-          </p>
-        ) : null}
-      </div>
+      </form>
+      {error ? <p className="field-error" role="alert">{error}</p> : null}
 
-      <div className="reverse-dcf-metrics">
-        <div className="dcf-metric reverse-dcf-kpi">
-          <div className="dcf-metric-label">Implied Growth Rate</div>
-          <div className="dcf-metric-value" style={{ color: impliedColor }}>
-            {pctFmt(impliedGrowth)}
-          </div>
-          <div className="dcf-metric-sub">Uniform Y1-Y5 revenue growth</div>
-        </div>
-
-        <div className="dcf-metric reverse-dcf-kpi">
-          <div className="dcf-metric-label">Target Price</div>
-          <div className="dcf-metric-value">
-            {formatCurrency(data.target_price ?? currentPrice)}
-          </div>
-          <div className="dcf-metric-sub">Current market reference</div>
-        </div>
-
-        <div className="dcf-metric reverse-dcf-kpi">
-          <div className="dcf-metric-label">Base Fair Value</div>
-          <div className="dcf-metric-value">
-            {formatCurrency(data.base_fair_value)}
-          </div>
-          <div className="dcf-metric-sub">Forward DCF result</div>
-        </div>
-
-        <div className="dcf-metric reverse-dcf-kpi">
-          <div className="dcf-metric-label">Margin of Safety</div>
-          <div className="dcf-metric-value" style={{ color: marginColor }}>
-            {formatPercent(marginOfSafety)}
-          </div>
-          <div className="dcf-metric-sub">Base value vs market</div>
-        </div>
-      </div>
-
-      <div className="reverse-dcf-context">
-        <div className="reverse-dcf-params">
-          <span className="reverse-dcf-param">
-            Base growth: {pctFmt(baseGrowth)}
-          </span>
-          <span className="reverse-dcf-param">
-            Growth gap: {growthDiff != null ? formatPercent(growthDiff) : "—"}
-          </span>
-          <span className="reverse-dcf-param">
-            WACC: {pctFmt(data.wacc)}
-          </span>
-          <span className="reverse-dcf-param">
-            Terminal Growth: {pctFmt(data.terminal_growth_rate)}
-          </span>
-          <span className="reverse-dcf-param" style={{ color: solverTone }}>
-            Solver: {solverLabel}
-          </span>
-          <span className="reverse-dcf-param">
-            Bounds: {pctFmt(data.growth_floor)} to {pctFmt(data.growth_ceiling)}
-          </span>
-          {data.fair_value_at_growth_floor != null &&
-          data.fair_value_at_growth_ceiling != null ? (
-            <span className="reverse-dcf-param">
-              Bound values: {formatCurrency(data.fair_value_at_growth_floor)} to{" "}
-              {formatCurrency(data.fair_value_at_growth_ceiling)}
-            </span>
-          ) : null}
-        </div>
-        <p className="reverse-dcf-export-note">
-          PDF export uses the initial market-price Reverse DCF shown when this
-          report loaded. Custom target runs stay interactive in this web view.
-          Solver bounds are search limits; non-solved statuses reduce
-          interpretability.
-        </p>
-      </div>
-
-      <div className="reverse-dcf-interpretation">
-        <div className="reverse-dcf-interpretation-label">Interpretation</div>
-        <p className="reverse-dcf-interpretation-text">{data.interpretation}</p>
-      </div>
+      <p className="table-footnote">
+        Search range {formatRate(data.growth_floor, 0)} to {formatRate(data.growth_ceiling, 0)}
+        {data.fair_value_at_growth_floor != null && data.fair_value_at_growth_ceiling != null
+          ? ` (values ${formatCurrency(data.fair_value_at_growth_floor, 2, currency)} to ${formatCurrency(data.fair_value_at_growth_ceiling, 2, currency)})`
+          : ""}
+        . WACC {formatRate(data.wacc)}, terminal growth {formatRate(data.terminal_growth_rate)} held constant.
+        {custom ? " The PDF export uses the price tested here." : ""}
+      </p>
     </div>
   );
 }

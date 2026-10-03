@@ -8,12 +8,18 @@ export interface CompanyProfile {
   price: number | null;
   currency: string | null;
   pe_ratio: number | null;
+  peg_ratio?: number | null;
+  /** Always null on the free data tier; kept for API compatibility. */
   forward_pe: number | null;
   shares_outstanding: number | null;
   beta: number | null;
   description: string | null;
   exchange?: string | null;
   exchange_full_name?: string | null;
+  /** Unix seconds when the quote/profile was fetched from the provider. */
+  data_as_of?: number | null;
+  /** True when the provider was unavailable and a cached copy was served. */
+  served_stale?: boolean;
 }
 
 export type WACCBreakdown = {
@@ -156,6 +162,7 @@ export interface MultiplesResult {
   current_price: number | null;
   peers_used: string[];
   peer_source?: "custom" | "fmp_stock_peers" | "static_fallback" | string | null;
+  period_basis?: string | null;
   warnings?: string[];
 }
 
@@ -163,18 +170,22 @@ export interface FullValuation {
   profile: CompanyProfile;
   dcf: DCFResult | null;
   ddm: DDMResult | null;
-  multiples: MultiplesResult;
+  multiples: MultiplesResult | null;
   primary_model: "dcf" | "ddm";
+  /** Partial-result disclosures (a model that could not run, stale data). */
+  notices?: string[];
 }
 
 export type HistoricalFinancials = {
   symbol: string;
+  currency?: string | null;
+  /** Missing line items are null — never zero. */
   historical: Array<{
     year: number;
-    revenue: number;
-    ebitda: number;
-    net_income: number;
-    operating_income: number;
+    revenue: number | null;
+    ebitda: number | null;
+    net_income: number | null;
+    operating_income: number | null;
   }>;
 };
 
@@ -183,6 +194,9 @@ export type SensitivityTable = {
   wacc_values: number[];
   terminal_growth_values: number[];
   grid: (number | null)[][];
+  /** Centre of the grid: the company's own base-case assumptions. */
+  base_wacc?: number;
+  base_terminal_growth?: number;
   current_price: number | null;
 };
 
